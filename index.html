@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#08121f">
+  <title>MHD SHOP — Boutique gaming</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <button class="icon-btn" id="menuBtn" aria-label="Menu">☰</button>
+    <a class="brand" href="#">MHD<span>SHOP</span></a>
+    <div class="top-actions">
+      <button class="icon-btn" aria-label="Recherche" id="focusSearch">⌕</button>
+      <button class="icon-btn" aria-label="Compte">♙</button>
+      <button class="cart-btn" aria-label="Panier">🛒<b id="cartCount">0</b></button>
+    </div>
+  </header>
+
+  <main>
+    <section class="search-wrap">
+      <input id="search" type="search" placeholder="Rechercher un produit…" autocomplete="off">
+      <button id="filterBtn" title="Filtres">☷</button>
+    </section>
+
+    <section class="hero">
+      <div class="hero-copy">
+        <small>BIENVENUE SUR</small>
+        <h1>MHD<span>SHOP</span></h1>
+        <p>Ta boutique digitale gaming.</p>
+        <div class="badges">
+          <span>⚡ Rapide</span><span>🛡️ Fiable</span><span>💬 WhatsApp</span>
+        </div>
+        <a class="primary" href="#products">Explorer la boutique →</a>
+      </div>
+      <div class="hero-art">🎮</div>
+    </section>
+
+    <section class="section">
+      <div class="section-head"><h2>Catégories</h2></div>
+      <div class="categories">
+        <button data-cat="Gaming">🎮<strong>Gaming</strong></button>
+        <button data-cat="eFootball">⚽<strong>eFootball</strong></button>
+        <button data-cat="Digital">💻<strong>Digital</strong></button>
+        <button data-cat="Autres">▦<strong>Autres</strong></button>
+      </div>
+    </section>
+
+    <section class="section" id="products">
+      <div class="section-head">
+        <h2>Produits populaires</h2>
+        <button class="link-btn" id="showAll">Voir tout →</button>
+      </div>
+      <div class="products" id="productGrid"></div>
+      <p class="empty" id="empty">Aucun produit trouvé.</p>
+    </section>
+
+    <section class="support">
+      <div><strong>Besoin d’aide ?</strong><small>Contacte-nous directement sur WhatsApp.</small></div>
+      <a href="#" id="whatsapp">💬 Commander sur WhatsApp →</a>
+    </section>
+  </main>
+
+  <nav class="bottom-nav">
+    <a class="active" href="#">⌂<span>Accueil</span></a>
+    <a href="#products">▦<span>Boutique</span></a>
+    <a href="#products">🎮<span>Gaming</span></a>
+    <a href="#">🛒<span>Panier</span></a>
+    <a href="#">♙<span>Compte</span></a>
+  </nav>
+
+  <script src="script.js"></script>
+</body>
+</html>
