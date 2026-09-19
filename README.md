@@ -1,4 +1,5 @@
-# MHD SHOP V2
-Version mobile-first avec navigation fonctionnelle, boutique, recherche, catégories, panier, compte local et préparation WhatsApp.
-Les produits sont des démos. Utiliser uniquement des produits/services autorisés à la vente.
-Le numéro WhatsApp et le vrai système de comptes/admin seront configurés dans les prochaines étapes.
+MHD SHOP V3 — prototype
+Espace Admin démo : ajouter, modifier, supprimer et gérer la disponibilité des produits.
+Les produits sont stockés dans localStorage sur cet appareil. Ce n’est pas une vraie sécurité serveur.
+GitHub Pages reste statique. Une prochaine étape pourra connecter une vraie base de données et une authentification sécurisée.
+Utiliser uniquement des produits/services que vous êtes autorisé à vendre ou distribuer.
