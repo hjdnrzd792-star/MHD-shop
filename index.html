@@ -1,11 +1,106 @@
-<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>𝓜𝓗𝓓𝓢𝓗𝓞𝓟</title><link rel="stylesheet" href="style.css"></head><body>
-<header><b>𝓜𝓗𝓓𝓢𝓗𝓞𝓟</b><button data-go="panier">🛒 <span id="cartCount">0</span></button></header>
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>𝓜𝓗𝓓𝓢𝓗𝓞𝓟</title>
+<link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<header>
+  <b>𝓜𝓗𝓓𝓢𝓗𝓞𝓟</b>
+  <button data-go="panier">🛒 <span id="cartCount">0</span></button>
+</header>
+
 <main>
-<section id="accueil" class="page active"><div class="hero"><small>MHD SHOP</small><h1>Gaming & digital.</h1><p>Découvre nos produits et services autorisés.</p><button class="primary" data-go="boutique">Voir la boutique</button></div><h2>Produits</h2><div id="homeProducts" class="grid"></div></section>
-<section id="boutique" class="page"><h1>Boutique</h1><input id="search" placeholder="🔎 Rechercher..."><div id="categories" class="chips"></div><div id="products" class="grid"></div></section>
-<section id="panier" class="page"><h1>Panier</h1><div id="cart"></div></section>
-<section id="compte" class="page"><h1>Mon compte</h1><div id="authPanel" class="panel"></div></section>
-<section id="admin" class="page"><div class="head"><h1>⚙️ Admin</h1><button id="adminExit">Fermer</button></div><div class="notice">Espace réservé au compte administrateur. Les autorisations sont vérifiées avec Supabase.</div><div class="panel"><h2 id="formTitle">Ajouter un produit</h2><input type="hidden" id="editId"><label>Nom</label><input id="pName" placeholder="Nom du produit"><label>Catégorie</label><input id="pCategory" placeholder="Gaming"><label>Prix FCFA</label><input id="pPrice" type="number" min="0"><label>Image ou emoji</label><input id="pImage" placeholder="🎮 ou URL"><label>Disponibilité</label><select id="pAvailable"><option value="true">Disponible</option><option value="false">Indisponible</option></select><button class="primary" id="saveProduct">Enregistrer</button><button id="cancelEdit">Annuler</button></div><h2>Mes produits</h2><div id="adminProducts"></div></section>
+
+<section id="accueil" class="page active">
+  <div class="hero">
+    <small>MHD SHOP</small>
+    <h1>Gaming & digital.</h1>
+    <p>Découvre nos produits et services autorisés.</p>
+    <button class="primary" data-go="boutique">Voir la boutique</button>
+  </div>
+
+  <h2>Produits</h2>
+  <div id="homeProducts" class="grid"></div>
+</section>
+
+<section id="boutique" class="page">
+  <h1>Boutique</h1>
+  <input id="search" placeholder="🔎 Rechercher...">
+  <div id="categories" class="chips"></div>
+  <div id="products" class="grid"></div>
+</section>
+
+<section id="panier" class="page">
+  <h1>Panier</h1>
+  <div id="cart"></div>
+</section>
+
+<section id="compte" class="page">
+  <h1>Mon compte</h1>
+  <div id="authPanel" class="panel"></div>
+</section>
+
+<section id="admin" class="page">
+  <div class="head">
+    <h1>⚙️ Admin</h1>
+    <button id="adminExit">Fermer</button>
+  </div>
+
+  <div class="notice">
+    Espace réservé au compte administrateur.
+    Les autorisations sont vérifiées avec Supabase.
+  </div>
+
+  <div class="panel">
+    <h2 id="formTitle">Ajouter un produit</h2>
+
+    <input type="hidden" id="editId">
+
+    <label>Nom</label>
+    <input id="pName" placeholder="Nom du produit">
+
+    <label>Catégorie</label>
+    <input id="pCategory" placeholder="Gaming">
+
+    <label>Prix FCFA</label>
+    <input id="pPrice" type="number" min="0">
+
+    <label>Image ou emoji</label>
+    <input id="pImage" placeholder="🎮 ou URL">
+
+    <label>Disponibilité</label>
+    <select id="pAvailable">
+      <option value="true">Disponible</option>
+      <option value="false">Indisponible</option>
+    </select>
+
+    <button class="primary" id="saveProduct">Enregistrer</button>
+    <button id="cancelEdit">Annuler</button>
+  </div>
+
+  <h2>Mes produits</h2>
+  <div id="adminProducts"></div>
+</section>
+
 </main>
-<nav><button data-go="accueil">🏠<span>Accueil</span></button><button data-go="boutique">🛍️<span>Boutique</span></button><button data-go="panier">🛒<span>Panier</span></button><button data-go="compte">👤<span>Compte</span></button><button id="adminOpen">⚙️<span>Admin</span></button></nav>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="script.js"></script></body></html>
+
+<nav>
+  <button data-go="accueil">🏠<span>Accueil</span></button>
+  <button data-go="boutique">🛍️<span>Boutique</span></button>
+  <button data-go="panier">🛒<span>Panier</span></button>
+  <button data-go="compte">👤<span>Compte</span></button>
+
+  <!-- CORRECTION : data-go="admin" -->
+  <button id="adminOpen" data-go="admin">⚙️<span>Admin</span></button>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="script.js"></script>
+
+</body>
+</html>
