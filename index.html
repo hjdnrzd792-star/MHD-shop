@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>𝓜𝓗𝓓𝓢𝓗𝓞𝓟</title>
-<link rel="stylesheet" href="style.css">
+
+<link rel="stylesheet" href="style.css?v=2">
 </head>
 
 <body>
@@ -12,7 +13,7 @@
 <header>
   <img class="site-logo" src="logo-mhd-shop.png" alt="MHD SHOP">
 
-  <button data-go="panier">
+  <button data-go="panier" aria-label="Panier">
     🛒 <span id="cartCount">0</span>
   </button>
 </header>
@@ -22,16 +23,24 @@
 <section id="accueil" class="page active">
 
   <div class="hero">
+
     <small>MHD SHOP</small>
+
     <h1>Gaming & digital.</h1>
-    <p>Découvre nos produits et services autorisés.</p>
+
+    <p>
+      Découvre nos produits et services autorisés.
+      Une expérience gaming pensée pour toi.
+    </p>
 
     <button class="primary" data-go="boutique">
       Voir la boutique
     </button>
+
   </div>
 
   <h2>Produits populaires</h2>
+
   <div id="homeProducts" class="grid"></div>
 
 </section>
@@ -43,6 +52,7 @@
 
   <input
     id="search"
+    type="search"
     placeholder="🔎 Rechercher un produit..."
   >
 
@@ -83,9 +93,12 @@
 
   </div>
 
+
   <div class="notice">
+
     Espace réservé au compte administrateur.
     Les autorisations sont vérifiées avec Supabase.
+
   </div>
 
 
@@ -101,7 +114,9 @@
     >
 
 
-    <label>Nom du produit</label>
+    <label for="pName">
+      Nom du produit
+    </label>
 
     <input
       id="pName"
@@ -109,7 +124,9 @@
     >
 
 
-    <label>Catégorie</label>
+    <label for="pCategory">
+      Catégorie
+    </label>
 
     <input
       id="pCategory"
@@ -117,17 +134,21 @@
     >
 
 
-    <label>Prix FCFA</label>
+    <label for="pPrice">
+      Prix FCFA
+    </label>
 
     <input
       id="pPrice"
       type="number"
-      min="0"
+      min="1"
       placeholder="5000"
     >
 
 
-    <label>Image ou emoji</label>
+    <label for="pImage">
+      Image ou emoji
+    </label>
 
     <input
       id="pImage"
@@ -135,7 +156,9 @@
     >
 
 
-    <label>Disponibilité</label>
+    <label for="pAvailable">
+      Disponibilité
+    </label>
 
     <select id="pAvailable">
 
