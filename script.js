@@ -1,1021 +1,1351 @@
-/* =========================================================
-   MHD SHOP V5 — SCRIPT
-   ========================================================= */
-
 const SUPABASE_URL = "https://oabjxsclanvgmvnezabj.supabase.co";
 const SUPABASE_KEY = "sb_publishable_Wccb86Hdfbxwx1tj0ciPDg_aRv8yqje";
 
-const { createClient } = window.supabase;
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabase = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_KEY
+);
 
 const WHATSAPP = "221787488199";
 
-const demoProducts = [
-  { id: "demo-1", name: "Pack Gaming Premium", category: "Gaming", price: 5000, image: "", available: true },
-  { id: "demo-2", name: "Service Digital", category: "Digital", price: 3000, image: "", available: true },
-  { id: "demo-3", name: "Carte Cadeau", category: "Cartes", price: 10000, image: "", available: true }
-];
-
 let products = [];
 let cart = JSON.parse(localStorage.getItem("mhd_cart") || "[]");
-let selectedCategory = "Tous";
 let currentUser = null;
-let currentProfile = null;
-let isAdmin = false;
-let verifiedPhone = false;
-let pendingPhone = "";
-let editingImage = "";
-let orders = [];
+let profile = null;
+let selectedCategory = "Tous";
+let editingProductId = null;
+let currentImage = null;
 
-/* ---------- HELPERS ---------- */
+/* =========================================================
+   UTILITAIRES
+========================================================= */
 
-const $ = (id) => document.getElementById(id);
+const $ = id => document.getElementById(id);
 
-function esc(value = "") {
-  return String(value).replace(/[&<>"']/g, (c) => ({
-    "&":"&amp;",
-    "<":"&lt;",
-    ">":"&gt;",
-    '"':"&quot;",
-    "'":"&#039;"
-  }[c]));
+function money(value){
+  return Number(value || 0).toLocaleString("fr-FR") + " FCFA";
 }
 
-function money(value) {
-  return `${Number(value || 0).toLocaleString("fr-FR")} FCFA`;
-}
-
-function saveCart() {
+function saveCart(){
   localStorage.setItem("mhd_cart", JSON.stringify(cart));
-  renderCartCount();
+  updateCartCount();
 }
 
-function cartCount() {
-  return cart.reduce((sum, item) => sum + Number(item.qty || 0), 0);
+function updateCartCount(){
+  const count = cart.reduce((sum,item) => sum + Number(item.qty || 1),0);
+  const el = $("cartCount");
+  if(el) el.textContent = count;
 }
 
-function cartTotal() {
-  return cart.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.qty || 0), 0);
+function escapeHTML(value){
+  return String(value ?? "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
 }
 
-function showPage(id) {
-  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
-  const page = $(id);
-  if (page) page.classList.add("active");
-  window.scrollTo({ top: 0, behavior: "smooth" });
-  closeAI();
-  if (id === "compte") renderAccount();
-  if (id === "admin") openAdmin();
-}
+function notify(message){
+  const old = document.querySelector(".mhd-toast");
+  if(old) old.remove();
 
-function imageHTML(product, cls = "product-image") {
-  if (product.image) {
-    return `<div class="${cls}"><img src="${esc(product.image)}" alt="${esc(product.name)}"></div>`;
-  }
-  return `<div class="${cls}">🎮</div>`;
-}
+  const toast = document.createElement("div");
+  toast.className = "mhd-toast";
+  toast.textContent = message;
 
-/* ---------- NAVIGATION ---------- */
-
-document.addEventListener("click", (e) => {
-  const go = e.target.closest("[data-go]");
-  if (!go) return;
-  e.preventDefault();
-  showPage(go.dataset.go);
-});
-
-$("adminOpen")?.addEventListener("click", (e) => {
-  e.preventDefault();
-  showPage("admin");
-});
-
-$("adminExit")?.addEventListener("click", () => showPage("accueil"));
-
-/* ---------- PRODUCTS ---------- */
-
-async function loadProducts() {
-  try {
-    const { data, error } = await supabase
-      .from("products")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (error) throw error;
-    products = data || [];
-
-    if (!products.length) {
-      products = [...demoProducts];
-    }
-  } catch (err) {
-    console.warn("Products:", err.message);
-    products = [...demoProducts];
-  }
-
-  renderCategories();
-  renderProducts();
-  renderHomeProducts();
-  renderAdminProducts();
-  syncCartWithProducts();
-}
-
-function renderHomeProducts() {
-  const box = $("homeProducts");
-  if (!box) return;
-
-  const list = products.filter(p => p.available !== false).slice(0, 4);
-
-  box.innerHTML = list.length
-    ? list.map(productCard).join("")
-    : `<div class="panel">Aucun produit disponible pour le moment.</div>`;
-}
-
-function productCard(p) {
-  const available = p.available !== false;
-
-  return `
-    <article class="card">
-      ${imageHTML(p)}
-      <h3>${esc(p.name)}</h3>
-      <div class="price">${money(p.price)}</div>
-      <div class="${available ? "available" : "unavailable"}">
-        ${available ? "● Disponible" : "● Indisponible"}
-      </div>
-      <div style="height:9px"></div>
-      <button class="primary" ${available ? "" : "disabled"} data-add="${esc(p.id)}">
-        ${available ? "🛒 Ajouter" : "Indisponible"}
-      </button>
-    </article>
-  `;
-}
-
-function renderProducts() {
-  const box = $("products");
-  if (!box) return;
-
-  const search = ($("search")?.value || "").trim().toLowerCase();
-
-  const list = products.filter(p => {
-    const categoryOk = selectedCategory === "Tous" || p.category === selectedCategory;
-    const searchOk =
-      !search ||
-      String(p.name).toLowerCase().includes(search) ||
-      String(p.category).toLowerCase().includes(search);
-    return categoryOk && searchOk;
+  Object.assign(toast.style,{
+    position:"fixed",
+    top:"90px",
+    left:"50%",
+    transform:"translateX(-50%)",
+    zIndex:"9999",
+    padding:"13px 17px",
+    borderRadius:"16px",
+    background:"rgba(15,20,30,.88)",
+    border:"1px solid rgba(255,255,255,.16)",
+    color:"#fff",
+    backdropFilter:"blur(20px)",
+    WebkitBackdropFilter:"blur(20px)",
+    boxShadow:"0 15px 40px rgba(0,0,0,.35)",
+    fontWeight:"800",
+    fontSize:"13px",
+    maxWidth:"90%",
+    textAlign:"center"
   });
 
-  box.innerHTML = list.length
-    ? list.map(productCard).join("")
-    : `<div class="panel">Aucun produit trouvé.</div>`;
+  document.body.appendChild(toast);
+
+  setTimeout(()=>{
+    toast.style.opacity="0";
+    toast.style.transition=".25s";
+    setTimeout(()=>toast.remove(),250);
+  },2200);
 }
 
-function renderCategories() {
-  const box = $("categories");
-  if (!box) return;
+/* =========================================================
+   NAVIGATION — CORRECTION PRINCIPALE
+========================================================= */
 
-  const categories = ["Tous", ...new Set(products.map(p => p.category).filter(Boolean))];
+function goTo(pageId){
 
-  box.innerHTML = categories.map(c => `
-    <button class="chip" data-category="${esc(c)}"
-      style="${selectedCategory === c ? "background:#087cff;color:#fff" : ""}">
-      ${esc(c)}
-    </button>
-  `).join("");
-}
+  const pages = document.querySelectorAll(".page");
 
-document.addEventListener("click", (e) => {
-  const add = e.target.closest("[data-add]");
-  if (add) {
-    addToCart(add.dataset.add);
+  pages.forEach(page=>{
+    page.classList.remove("active");
+  });
+
+  const target = document.getElementById(pageId);
+
+  if(!target){
+    console.warn("Page introuvable:",pageId);
     return;
   }
 
-  const category = e.target.closest("[data-category]");
-  if (category) {
-    selectedCategory = category.dataset.category;
-    renderCategories();
-    renderProducts();
-  }
-});
+  target.classList.add("active");
 
-$("search")?.addEventListener("input", renderProducts);
-
-function findProduct(id) {
-  return products.find(p => String(p.id) === String(id));
-}
-
-function addToCart(id) {
-  const product = findProduct(id);
-  if (!product || product.available === false) return;
-
-  const existing = cart.find(i => String(i.id) === String(id));
-
-  if (existing) {
-    existing.qty += 1;
-  } else {
-    cart.push({
-      id: product.id,
-      name: product.name,
-      price: Number(product.price),
-      image: product.image || "",
-      qty: 1
+  document.querySelectorAll(".liquid-nav button[data-go]")
+    .forEach(button=>{
+      button.classList.toggle(
+        "active",
+        button.dataset.go === pageId
+      );
     });
-  }
 
-  saveCart();
-  renderCart();
+  window.scrollTo({
+    top:0,
+    behavior:"smooth"
+  });
 
-  const button = document.querySelector(`[data-add="${CSS.escape(String(id))}"]`);
-  if (button) {
-    const old = button.textContent;
-    button.textContent = "✅ Ajouté";
-    setTimeout(() => button.textContent = old, 900);
-  }
+  if(pageId === "boutique") renderProducts();
+  if(pageId === "panier") renderCart();
+  if(pageId === "compte") renderAccount();
+  if(pageId === "admin") openAdmin();
+  if(pageId === "commande") prepareCheckout();
 }
 
-function syncCartWithProducts() {
-  cart = cart.map(item => {
-    const p = findProduct(item.id);
-    if (!p) return item;
-    return {
-      ...item,
-      name: p.name,
-      price: Number(p.price),
-      image: p.image || ""
-    };
-  }).filter(item => item.qty > 0);
+/* Tous les boutons data-go fonctionnent ici */
+document.addEventListener("click",event=>{
 
-  saveCart();
-  renderCart();
+  const button = event.target.closest("[data-go]");
+
+  if(!button) return;
+
+  event.preventDefault();
+
+  const page = button.dataset.go;
+
+  if(page) goTo(page);
+});
+
+/* =========================================================
+   AUTH
+========================================================= */
+
+async function loadUser(){
+
+  const {data} = await supabase.auth.getSession();
+
+  currentUser = data.session?.user || null;
+
+  if(currentUser){
+    await loadProfile();
+  }
+
+  renderAccount();
 }
 
-function renderCartCount() {
-  if ($("cartCount")) $("cartCount").textContent = cartCount();
-}
+supabase.auth.onAuthStateChange(async(_event,session)=>{
 
-function renderCart() {
-  const box = $("cart");
-  if (!box) return;
+  currentUser = session?.user || null;
 
-  if (!cart.length) {
-    box.innerHTML = `
-      <div class="panel">
-        <h3>Ton panier est vide 🛒</h3>
-        <p style="color:var(--muted)">Ajoute des produits depuis la boutique.</p>
-        <button class="primary full" data-go="boutique">🛍️ Aller à la boutique</button>
-      </div>
-    `;
-    return;
-  }
-
-  box.innerHTML = `
-    ${cart.map(item => `
-      <div class="cart-item">
-        <div class="cart-thumb">
-          ${item.image ? `<img src="${esc(item.image)}" alt="">` : "🎮"}
-        </div>
-        <div class="grow">
-          <b>${esc(item.name)}</b>
-          <div style="color:var(--red);font-weight:900;margin-top:4px">${money(item.price)}</div>
-          <div class="qty" style="margin-top:7px">
-            <button data-qty="${esc(item.id)}" data-delta="-1">−</button>
-            <b>${item.qty}</b>
-            <button data-qty="${esc(item.id)}" data-delta="1">+</button>
-          </div>
-        </div>
-        <button class="danger" data-remove="${esc(item.id)}">✕</button>
-      </div>
-    `).join("")}
-
-    <div class="cart-summary">
-      <div class="cart-total">
-        <span>Total</span>
-        <strong>${money(cartTotal())}</strong>
-      </div>
-      <button class="primary full" id="goCheckout">📦 Passer la commande</button>
-      <div style="height:8px"></div>
-      <button class="ghost full" id="clearCart">🗑️ Vider le panier</button>
-    </div>
-  `;
-}
-
-document.addEventListener("click", (e) => {
-  const qty = e.target.closest("[data-qty]");
-  if (qty) {
-    const item = cart.find(i => String(i.id) === String(qty.dataset.qty));
-    if (!item) return;
-    item.qty += Number(qty.dataset.delta);
-    if (item.qty <= 0) cart = cart.filter(i => String(i.id) !== String(item.id));
-    saveCart();
-    renderCart();
-    return;
-  }
-
-  const remove = e.target.closest("[data-remove]");
-  if (remove) {
-    cart = cart.filter(i => String(i.id) !== String(remove.dataset.remove));
-    saveCart();
-    renderCart();
-    return;
-  }
-
-  if (e.target.closest("#goCheckout")) {
-    if (!currentUser) {
-      showPage("compte");
-      toast("Connecte-toi avant de finaliser ta commande.");
-      return;
-    }
-    showPage("commande");
-    prefillOrder();
-  }
-
-  if (e.target.closest("#clearCart")) {
-    cart = [];
-    saveCart();
-    renderCart();
+  if(currentUser){
+    setTimeout(loadProfile,0);
+  }else{
+    profile = null;
+    renderAccount();
   }
 });
 
-/* ---------- AUTH ---------- */
+/* =========================================================
+   PROFIL
+========================================================= */
 
-async function getSession() {
-  const { data } = await supabase.auth.getSession();
-  currentUser = data.session?.user || null;
-  await loadProfile();
-  await checkAdmin();
-  renderAccount();
-  prefillOrder();
-}
+async function loadProfile(){
 
-async function loadProfile() {
-  currentProfile = null;
-  if (!currentUser) return;
+  if(!currentUser) return;
 
-  const { data, error } = await supabase
+  const {data,error} = await supabase
     .from("profiles")
     .select("*")
-    .eq("id", currentUser.id)
+    .eq("id",currentUser.id)
     .maybeSingle();
 
-  if (!error) currentProfile = data || null;
-
-  if (currentProfile?.phone && currentProfile.phone_verified) {
-    verifiedPhone = true;
-    pendingPhone = currentProfile.phone;
-  }
-}
-
-async function checkAdmin() {
-  isAdmin = false;
-  if (!currentUser) return;
-
-  const { data } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", currentUser.id)
-    .maybeSingle();
-
-  isAdmin = data?.role === "admin";
-
-  const adminButton = $("adminOpen");
-  if (adminButton) adminButton.style.display = isAdmin ? "flex" : "none";
-}
-
-function renderAccount() {
-  const box = $("authPanel");
-  if (!box) return;
-
-  if (!currentUser) {
-    box.innerHTML = `
-      <h2>Connexion</h2>
-      <p style="color:var(--muted)">Connecte-toi pour enregistrer ton profil et tes commandes.</p>
-
-      <label>Email</label>
-      <input id="emailLogin" type="email" placeholder="ton@email.com">
-
-      <label>Mot de passe</label>
-      <input id="emailPassword" type="password" placeholder="••••••••">
-
-      <button class="primary full" id="emailLoginBtn">🔐 Se connecter</button>
-      <div style="height:8px"></div>
-      <button class="secondary full" id="emailSignup">✨ Créer mon compte</button>
-
-      <div style="height:15px"></div>
-      <button class="ghost full" id="googleLogin">🇬 Connexion avec Google</button>
-      <div style="height:8px"></div>
-      <button class="ghost full" id="appleLogin"> Continuer avec Apple</button>
-
-      <div class="account-contact">
-        <h3>💬 Support vendeur</h3>
-        <p style="color:var(--muted)">Pour les informations et l'aide :</p>
-        <a class="contact-number" href="https://wa.me/${WHATSAPP}" target="_blank" rel="noopener">
-          +221 78 748 81 99
-        </a>
-        <button class="secondary full" id="supportWhatsApp">💬 Ouvrir WhatsApp</button>
-      </div>
-    `;
+  if(error){
+    console.error(error);
     return;
   }
 
-  const first = currentProfile?.first_name || currentUser.user_metadata?.first_name || "";
-  const last = currentProfile?.last_name || currentUser.user_metadata?.last_name || "";
+  profile = data;
 
-  box.innerHTML = `
-    <div style="display:flex;justify-content:space-between;gap:12px;align-items:center">
-      <div>
-        <small style="color:var(--blue2);font-weight:900">COMPTE CONNECTÉ</small>
-        <h2 style="margin:5px 0">${esc(first || currentUser.email?.split("@")[0] || "Client")}</h2>
-      </div>
-      <div style="font-size:30px">👤</div>
+  if(profile){
+    if($("orderFirstName")) $("orderFirstName").value = profile.first_name || "";
+    if($("orderLastName")) $("orderLastName").value = profile.last_name || "";
+    if($("orderPhone")) $("orderPhone").value = profile.phone || "";
+  }
+}
+
+async function saveProfile(){
+
+  if(!currentUser){
+    notify("Connecte-toi d'abord.");
+    return;
+  }
+
+  const firstName = $("profileFirstName")?.value.trim() || "";
+  const lastName = $("profileLastName")?.value.trim() || "";
+  const phone = $("profilePhone")?.value.trim() || "";
+
+  const {error} = await supabase
+    .from("profiles")
+    .upsert({
+      id:currentUser.id,
+      first_name:firstName,
+      last_name:lastName,
+      phone:phone
+    });
+
+  if(error){
+    console.error(error);
+    notify("Impossible d'enregistrer le profil.");
+    return;
+  }
+
+  await loadProfile();
+
+  notify("Profil enregistré ✅");
+}
+
+/* =========================================================
+   COMPTE
+========================================================= */
+
+function renderAccount(){
+
+  const panel = $("authPanel");
+
+  if(!panel) return;
+
+  if(!currentUser){
+
+    panel.innerHTML = `
+      <h2>Bienvenue 👋</h2>
+      <p style="color:#9ca8bd">
+        Connecte-toi pour gérer ton profil et tes commandes.
+      </p>
+
+      <label>Email</label>
+      <input id="loginEmail" type="email" placeholder="ton@email.com">
+
+      <label>Mot de passe</label>
+      <input id="loginPassword" type="password" placeholder="Mot de passe">
+
+      <button class="primary full" id="loginButton">
+        🔐 Se connecter
+      </button>
+
+      <button class="secondary full" id="signupButton">
+        ✨ Créer un compte
+      </button>
+
+      <button class="ghost full" id="googleButton">
+        🌐 Continuer avec Google
+      </button>
+
+      <button class="ghost full" id="appleButton">
+         Continuer avec Apple
+      </button>
+    `;
+
+    $("loginButton").onclick = login;
+    $("signupButton").onclick = signup;
+    $("googleButton").onclick = loginGoogle;
+    $("appleButton").onclick = loginApple;
+
+    return;
+  }
+
+  const email = escapeHTML(currentUser.email || "");
+
+  panel.innerHTML = `
+    <div style="margin-bottom:18px">
+      <small style="color:#63baff">COMPTE CONNECTÉ</small>
+      <h2 style="margin:5px 0">${email}</h2>
     </div>
 
     <label>Prénom</label>
-    <input id="profileFirst" value="${esc(first)}" placeholder="Prénom">
+    <input
+      id="profileFirstName"
+      value="${escapeHTML(profile?.first_name || "")}"
+      placeholder="Ton prénom"
+    >
 
     <label>Nom</label>
-    <input id="profileLast" value="${esc(last)}" placeholder="Nom">
+    <input
+      id="profileLastName"
+      value="${escapeHTML(profile?.last_name || "")}"
+      placeholder="Ton nom"
+    >
 
     <label>Téléphone</label>
-    <input id="profilePhone" type="tel" value="${esc(currentProfile?.phone || "")}" placeholder="+221 77 000 00 00">
+    <input
+      id="profilePhone"
+      type="tel"
+      value="${escapeHTML(profile?.phone || "")}"
+      placeholder="+221 77 000 00 00"
+    >
 
-    <div class="status-box ${verifiedPhone ? "ok" : ""}" id="profilePhoneStatus">
-      ${verifiedPhone ? "✅ Numéro vérifié et enregistré." : "⚠️ Ton numéro n'est pas encore vérifié."}
+    <div class="status-box">
+      ${profile?.phone_verified
+        ? "✅ Numéro vérifié"
+        : "⚠️ Numéro non vérifié"}
     </div>
 
-    <button class="secondary full" id="profileVerify">📲 Vérifier mon numéro</button>
-    <div style="height:8px"></div>
-    <button class="primary full" id="saveProfile">💾 Enregistrer mon profil</button>
-    <div style="height:8px"></div>
-    <button class="ghost full" id="logout">🚪 Se déconnecter</button>
+    <button class="primary full" id="saveProfileButton">
+      💾 Enregistrer mon profil
+    </button>
 
-    <div class="account-contact">
-      <h3>💬 Support vendeur</h3>
-      <p style="color:var(--muted)">Informations, aide et commandes :</p>
-      <a class="contact-number" href="https://wa.me/${WHATSAPP}" target="_blank" rel="noopener">
+    <button class="secondary full" id="accountVerifyPhone">
+      📲 Vérifier mon numéro
+    </button>
+
+    <button class="ghost full" id="logoutButton">
+      🚪 Se déconnecter
+    </button>
+
+    <div style="
+      margin-top:18px;
+      padding:15px;
+      border-radius:18px;
+      background:rgba(22,140,255,.08);
+      border:1px solid rgba(22,140,255,.15);
+    ">
+      <b>💬 Support vendeur</b>
+      <p style="margin:7px 0;color:#9ca8bd">
         +221 78 748 81 99
-      </a>
-      <button class="secondary full" id="supportWhatsApp">💬 Contacter le vendeur</button>
+      </p>
     </div>
-
-    <div class="theme-box">
-      <div class="theme-title">🎨 Apparence</div>
-      <div class="theme-description">Passe entre l'interface sombre gaming et la version claire.</div>
-      <button class="theme-toggle" id="themeToggle">Changer le thème</button>
-    </div>
-
-    ${isAdmin ? `
-      <div class="theme-box">
-        <div class="theme-title">⚙️ Administration</div>
-        <div class="theme-description">Ton compte possède les droits administrateur.</div>
-        <button class="primary full" data-go="admin">Ouvrir Admin</button>
-      </div>
-    ` : ""}
   `;
+
+  $("saveProfileButton").onclick = saveProfile;
+  $("logoutButton").onclick = logout;
+  $("accountVerifyPhone").onclick = verifyPhoneFromAccount;
 }
 
-document.addEventListener("click", async (e) => {
-  if (e.target.closest("#emailLoginBtn")) {
-    const email = $("emailLogin")?.value.trim();
-    const password = $("emailPassword")?.value;
+/* =========================================================
+   LOGIN
+========================================================= */
 
-    if (!email || !password) {
-      toast("Entre ton email et ton mot de passe.");
-      return;
-    }
+async function login(){
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      toast(error.message);
-    } else {
-      toast("Connexion réussie ✅");
-      await getSession();
-      showPage("accueil");
-    }
-  }
+  const email = $("loginEmail").value.trim();
+  const password = $("loginPassword").value;
 
-  if (e.target.closest("#emailSignup")) {
-    const email = $("emailLogin")?.value.trim();
-    const password = $("emailPassword")?.value;
-
-    if (!email || !password || password.length < 6) {
-      toast("Entre un email et un mot de passe d'au moins 6 caractères.");
-      return;
-    }
-
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: location.origin + location.pathname
-      }
-    });
-
-    if (error) toast(error.message);
-    else toast("Compte créé. Vérifie ton email si Supabase le demande.");
-  }
-
-  if (e.target.closest("#googleLogin")) {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: location.href }
-    });
-    if (error) toast(error.message);
-  }
-
-  if (e.target.closest("#appleLogin")) {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "apple",
-      options: { redirectTo: location.href }
-    });
-    if (error) toast(error.message);
-  }
-
-  if (e.target.closest("#logout")) {
-    await supabase.auth.signOut();
-    currentUser = null;
-    currentProfile = null;
-    isAdmin = false;
-    verifiedPhone = false;
-    renderAccount();
-    toast("Tu es déconnecté.");
-    showPage("accueil");
-  }
-
-  if (e.target.closest("#saveProfile")) {
-    await saveProfile();
-  }
-
-  if (e.target.closest("#profileVerify")) {
-    await startPhoneVerification($("profilePhone")?.value.trim());
-  }
-
-  if (e.target.closest("#supportWhatsApp")) {
-    openWhatsApp("Bonjour MHD SHOP, j'ai besoin d'informations.");
-  }
-
-  if (e.target.closest("#themeToggle")) {
-    toggleTheme();
-  }
-});
-
-async function saveProfile() {
-  if (!currentUser) return;
-
-  const first_name = $("profileFirst")?.value.trim() || "";
-  const last_name = $("profileLast")?.value.trim() || "";
-  const phone = $("profilePhone")?.value.trim() || "";
-
-  const { error } = await supabase
-    .from("profiles")
-    .upsert({
-      id: currentUser.id,
-      first_name,
-      last_name,
-      phone: verifiedPhone ? phone : (currentProfile?.phone || null),
-      phone_verified: verifiedPhone
-    }, { onConflict: "id" });
-
-  if (error) {
-    toast("Profil : " + error.message);
+  if(!email || !password){
+    notify("Remplis ton email et ton mot de passe.");
     return;
   }
 
-  await loadProfile();
-  renderAccount();
-  toast("Profil enregistré ✅");
-}
-
-async function startPhoneVerification(phone) {
-  if (!currentUser) {
-    toast("Connecte-toi d'abord.");
-    return;
-  }
-
-  if (!phone) {
-    toast("Entre ton numéro de téléphone.");
-    return;
-  }
-
-  pendingPhone = phone;
-
-  /*
-    Supabase Phone Auth doit être activé et un fournisseur SMS
-    doit être configuré dans le tableau de bord Supabase.
-  */
-  const { error } = await supabase.auth.updateUser({ phone });
-
-  if (error) {
-    toast("Vérification SMS : " + error.message);
-    return;
-  }
-
-  const code = prompt("Entre le code SMS reçu :");
-  if (!code) return;
-
-  const { error: verifyError } = await supabase.auth.verifyOtp({
-    phone,
-    token: code,
-    type: "phone_change"
+  const {error} = await supabase.auth.signInWithPassword({
+    email,
+    password
   });
 
-  if (verifyError) {
-    toast("Code incorrect ou expiré : " + verifyError.message);
+  if(error){
+    notify(error.message);
     return;
   }
 
-  verifiedPhone = true;
-
-  await supabase
-    .from("profiles")
-    .upsert({
-      id: currentUser.id,
-      phone,
-      phone_verified: true
-    }, { onConflict: "id" });
-
-  await loadProfile();
-  renderAccount();
-  prefillOrder();
-  toast("Numéro vérifié ✅");
+  notify("Connexion réussie ✅");
+  goTo("compte");
 }
 
-/* ---------- ORDER ---------- */
+async function signup(){
 
-function prefillOrder() {
-  if (!currentUser) return;
+  const email = $("loginEmail").value.trim();
+  const password = $("loginPassword").value;
 
-  const first = currentProfile?.first_name || currentUser.user_metadata?.first_name || "";
-  const last = currentProfile?.last_name || currentUser.user_metadata?.last_name || "";
-  const phone = currentProfile?.phone || "";
-
-  if ($("orderFirstName")) $("orderFirstName").value = first;
-  if ($("orderLastName")) $("orderLastName").value = last;
-  if ($("orderPhone")) $("orderPhone").value = phone;
-
-  updatePhoneStatus();
-}
-
-function updatePhoneStatus() {
-  const box = $("phoneStatus");
-  if (!box) return;
-
-  if (verifiedPhone) {
-    box.classList.add("ok");
-    box.textContent = "✅ Numéro vérifié. Il sera enregistré pour tes prochaines commandes.";
-  } else {
-    box.classList.remove("ok");
-    box.textContent = "⚠️ Ton numéro doit être vérifié avant la commande.";
+  if(!email || !password){
+    notify("Remplis ton email et choisis un mot de passe.");
+    return;
   }
+
+  if(password.length < 6){
+    notify("Le mot de passe doit avoir au moins 6 caractères.");
+    return;
+  }
+
+  const {error} = await supabase.auth.signUp({
+    email,
+    password
+  });
+
+  if(error){
+    notify(error.message);
+    return;
+  }
+
+  notify("Compte créé. Vérifie ton email si demandé.");
 }
 
-$("sendOtp")?.addEventListener("click", async () => {
-  await startOrderPhoneVerification();
-});
+async function loginGoogle(){
 
-$("verifyOtp")?.addEventListener("click", async () => {
-  await verifyOrderOtp();
-});
+  const {error} = await supabase.auth.signInWithOAuth({
+    provider:"google",
+    options:{
+      redirectTo:window.location.origin + window.location.pathname
+    }
+  });
 
-async function startOrderPhoneVerification() {
-  if (!currentUser) {
-    toast("Connecte-toi d'abord.");
+  if(error) notify(error.message);
+}
+
+async function loginApple(){
+
+  const {error} = await supabase.auth.signInWithOAuth({
+    provider:"apple",
+    options:{
+      redirectTo:window.location.origin + window.location.pathname
+    }
+  });
+
+  if(error) notify(error.message);
+}
+
+async function logout(){
+
+  await supabase.auth.signOut();
+
+  currentUser = null;
+  profile = null;
+
+  notify("Déconnexion effectuée.");
+  goTo("accueil");
+}
+
+/* =========================================================
+   TÉLÉPHONE
+========================================================= */
+
+async function sendPhoneOTP(){
+
+  if(!currentUser){
+    notify("Connecte-toi d'abord.");
     return;
   }
 
   const phone = $("orderPhone")?.value.trim();
 
-  if (!phone) {
-    toast("Entre ton numéro.");
+  if(!phone){
+    notify("Entre ton numéro de téléphone.");
     return;
   }
 
-  pendingPhone = phone;
+  const {error} = await supabase.auth.updateUser({
+    phone
+  });
 
-  const { error } = await supabase.auth.updateUser({ phone });
-
-  if (error) {
-    toast("SMS : " + error.message);
+  if(error){
+    console.error(error);
+    notify("Vérification SMS indisponible ou configuration SMS manquante.");
     return;
   }
 
   $("otpArea")?.classList.remove("hidden");
-  toast("Code SMS envoyé 📲");
+
+  if($("phoneStatus")){
+    $("phoneStatus").textContent =
+      "📲 Code envoyé. Entre le code reçu par SMS.";
+  }
+
+  notify("Code SMS envoyé.");
 }
 
-async function verifyOrderOtp() {
+async function verifyPhone(){
+
+  if(!currentUser) return;
+
   const phone = $("orderPhone")?.value.trim();
   const token = $("otpCode")?.value.trim();
 
-  if (!phone || !token) {
-    toast("Entre le code reçu par SMS.");
+  if(!phone || !token){
+    notify("Entre le code reçu par SMS.");
     return;
   }
 
-  const { error } = await supabase.auth.verifyOtp({
+  const {error} = await supabase.auth.verifyOtp({
     phone,
     token,
-    type: "phone_change"
+    type:"phone_change"
   });
 
-  if (error) {
-    toast("Code incorrect ou expiré.");
+  if(error){
+    console.error(error);
+    notify("Code incorrect ou expiré.");
     return;
   }
 
-  verifiedPhone = true;
+  const {error:profileError} = await supabase
+    .from("profiles")
+    .upsert({
+      id:currentUser.id,
+      phone,
+      phone_verified:true
+    });
+
+  if(profileError){
+    console.error(profileError);
+    notify("Numéro vérifié, mais profil non enregistré.");
+    return;
+  }
+
+  await loadProfile();
+
+  if($("phoneStatus")){
+    $("phoneStatus").textContent =
+      "✅ Numéro vérifié avec succès.";
+  }
+
+  notify("Numéro vérifié ✅");
+}
+
+async function verifyPhoneFromAccount(){
+
+  const phone = $("profilePhone")?.value.trim();
+
+  if(!phone){
+    notify("Entre d'abord ton numéro.");
+    return;
+  }
+
+  if(!currentUser){
+    notify("Connecte-toi d'abord.");
+    return;
+  }
+
+  const {error} = await supabase.auth.updateUser({phone});
+
+  if(error){
+    console.error(error);
+    notify("La vérification SMS doit être configurée dans Supabase.");
+    return;
+  }
+
+  const code = prompt("Entre le code reçu par SMS :");
+
+  if(!code) return;
+
+  const {error:verifyError} = await supabase.auth.verifyOtp({
+    phone,
+    token:code,
+    type:"phone_change"
+  });
+
+  if(verifyError){
+    notify("Code incorrect ou expiré.");
+    return;
+  }
 
   await supabase
     .from("profiles")
     .upsert({
-      id: currentUser.id,
+      id:currentUser.id,
       phone,
-      phone_verified: true
-    }, { onConflict: "id" });
+      phone_verified:true
+    });
 
   await loadProfile();
-  updatePhoneStatus();
+  renderAccount();
 
-  if ($("otpArea")) $("otpArea").classList.add("hidden");
-  if ($("sendOtp")) $("sendOtp").textContent = "✅ Numéro vérifié";
-
-  toast("Numéro vérifié ✅");
+  notify("Numéro vérifié ✅");
 }
 
-$("orderOnSite")?.addEventListener("click", async () => {
-  await createOrder("site");
-});
+/* =========================================================
+   PRODUITS
+========================================================= */
 
-$("orderOnWhatsApp")?.addEventListener("click", async () => {
-  await createOrder("whatsapp");
-});
+const demoProducts = [
+  {
+    id:"demo1",
+    name:"Gaming Premium",
+    category:"Gaming",
+    price:5000,
+    image:"",
+    available:true
+  },
+  {
+    id:"demo2",
+    name:"Service Digital",
+    category:"Digital",
+    price:3000,
+    image:"",
+    available:true
+  }
+];
 
-async function createOrder(method) {
-  if (!currentUser) {
-    showPage("compte");
-    toast("Connecte-toi pour commander.");
+async function loadProducts(){
+
+  const {data,error} = await supabase
+    .from("products")
+    .select("*")
+    .order("created_at",{ascending:false});
+
+  if(error){
+    console.error(error);
+    products = demoProducts;
+  }else{
+    products = data || [];
+  }
+
+  renderProducts();
+  renderHomeProducts();
+  renderCategories();
+}
+
+/* =========================================================
+   CATÉGORIES
+========================================================= */
+
+function renderCategories(){
+
+  const box = $("categories");
+
+  if(!box) return;
+
+  const cats = [
+    "Tous",
+    ...new Set(
+      products
+        .map(p=>p.category)
+        .filter(Boolean)
+    )
+  ];
+
+  box.innerHTML = cats.map(cat=>`
+    <button
+      class="${selectedCategory === cat ? "active":""}"
+      data-category="${escapeHTML(cat)}"
+    >
+      ${escapeHTML(cat)}
+    </button>
+  `).join("");
+
+  box.querySelectorAll("[data-category]").forEach(button=>{
+    button.onclick = ()=>{
+      selectedCategory = button.dataset.category;
+      renderCategories();
+      renderProducts();
+    };
+  });
+}
+
+/* =========================================================
+   CARTES PRODUITS
+========================================================= */
+
+function productHTML(product){
+
+  const image = product.image
+    ? `<img class="product-image" src="${product.image}" alt="${escapeHTML(product.name)}">`
+    : `
+      <div class="product-image"
+        style="
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          font-size:42px;
+          background:linear-gradient(135deg,#0b1628,#111827);
+        ">
+        🎮
+      </div>
+    `;
+
+  return `
+    <article class="product-card">
+
+      ${image}
+
+      <h3>${escapeHTML(product.name)}</h3>
+
+      <p>
+        ${escapeHTML(product.category || "Digital")}
+      </p>
+
+      <div class="price">
+        ${money(product.price)}
+      </div>
+
+      <div class="product-actions">
+
+        <button
+          data-add="${escapeHTML(product.id)}"
+          ${product.available === false ? "disabled":""}
+        >
+          ${product.available === false
+            ? "Indisponible"
+            : "Ajouter 🛒"}
+        </button>
+
+      </div>
+
+    </article>
+  `;
+}
+
+function renderProducts(){
+
+  const box = $("products");
+
+  if(!box) return;
+
+  const search =
+    ($("search")?.value || "")
+      .trim()
+      .toLowerCase();
+
+  let list = products.filter(product=>{
+
+    const matchesCategory =
+      selectedCategory === "Tous" ||
+      product.category === selectedCategory;
+
+    const matchesSearch =
+      !search ||
+      product.name.toLowerCase().includes(search) ||
+      String(product.category || "")
+        .toLowerCase()
+        .includes(search);
+
+    return matchesCategory && matchesSearch;
+  });
+
+  if(!list.length){
+    box.innerHTML = `
+      <div class="panel glass">
+        <h3>Aucun produit trouvé 🔎</h3>
+        <p style="color:#9ca8bd">
+          Essaie une autre recherche.
+        </p>
+      </div>
+    `;
     return;
   }
 
-  if (!cart.length) {
-    toast("Ton panier est vide.");
-    showPage("boutique");
+  box.innerHTML = list.map(productHTML).join("");
+
+  box.querySelectorAll("[data-add]").forEach(button=>{
+    button.onclick = ()=>{
+      addToCart(button.dataset.add);
+    };
+  });
+}
+
+function renderHomeProducts(){
+
+  const box = $("homeProducts");
+
+  if(!box) return;
+
+  box.innerHTML =
+    products
+      .filter(p=>p.available !== false)
+      .slice(0,4)
+      .map(productHTML)
+      .join("");
+
+  box.querySelectorAll("[data-add]").forEach(button=>{
+    button.onclick = ()=>{
+      addToCart(button.dataset.add);
+    };
+  });
+}
+
+$("search")?.addEventListener("input",renderProducts);
+
+/* =========================================================
+   PANIER
+========================================================= */
+
+function addToCart(id){
+
+  const product = products.find(
+    p=>String(p.id) === String(id)
+  );
+
+  if(!product){
+    notify("Produit introuvable.");
     return;
   }
 
-  const first_name = $("orderFirstName")?.value.trim();
-  const last_name = $("orderLastName")?.value.trim();
-  const phone = $("orderPhone")?.value.trim();
+  const existing = cart.find(
+    item=>String(item.id) === String(id)
+  );
 
-  if (!first_name || !last_name || !phone) {
-    toast("Prénom, nom et téléphone sont obligatoires.");
+  if(existing){
+    existing.qty = Number(existing.qty || 1) + 1;
+  }else{
+    cart.push({
+      id:product.id,
+      name:product.name,
+      price:Number(product.price),
+      image:product.image || "",
+      qty:1
+    });
+  }
+
+  saveCart();
+
+  notify("Produit ajouté au panier 🛒");
+}
+
+function removeFromCart(id){
+
+  cart = cart.filter(
+    item=>String(item.id) !== String(id)
+  );
+
+  saveCart();
+  renderCart();
+}
+
+function changeQty(id,delta){
+
+  const item = cart.find(
+    x=>String(x.id) === String(id)
+  );
+
+  if(!item) return;
+
+  item.qty = Number(item.qty || 1) + delta;
+
+  if(item.qty <= 0){
+    removeFromCart(id);
     return;
   }
 
-  if (!verifiedPhone) {
-    toast("Vérifie ton numéro avant de commander.");
+  saveCart();
+  renderCart();
+}
+
+function cartTotal(){
+
+  return cart.reduce(
+    (sum,item)=>
+      sum + Number(item.price) * Number(item.qty || 1),
+    0
+  );
+}
+
+function renderCart(){
+
+  const box = $("cart");
+
+  if(!box) return;
+
+  if(!cart.length){
+
+    box.innerHTML = `
+      <div class="panel glass" style="text-align:center;padding:35px 20px">
+        <div style="font-size:48px">🛒</div>
+        <h2>Ton panier est vide</h2>
+        <p style="color:#9ca8bd">
+          Ajoute des produits pour commencer.
+        </p>
+        <button class="primary" data-go="boutique">
+          🛍️ Voir la boutique
+        </button>
+      </div>
+    `;
+
     return;
   }
 
-  const items = cart.map(i => ({
-    id: i.id,
-    name: i.name,
-    price: Number(i.price),
-    qty: Number(i.qty),
-    image: i.image || ""
+  box.innerHTML = `
+
+    ${cart.map(item=>`
+
+      <div class="cart-item">
+
+        ${
+          item.image
+            ? `<img src="${item.image}" alt="">`
+            : `<div style="
+                width:70px;
+                height:70px;
+                display:grid;
+                place-items:center;
+                border-radius:15px;
+                background:#101827;
+                font-size:28px
+              ">🎮</div>`
+        }
+
+        <div class="cart-item-info">
+
+          <b>${escapeHTML(item.name)}</b>
+
+          <small>${money(item.price)}</small>
+
+          <div style="
+            display:flex;
+            align-items:center;
+            gap:7px;
+            margin-top:8px;
+          ">
+
+            <button
+              class="ghost"
+              style="min-height:32px;padding:0 11px"
+              data-minus="${item.id}"
+            >−</button>
+
+            <b>${item.qty}</b>
+
+            <button
+              class="ghost"
+              style="min-height:32px;padding:0 11px"
+              data-plus="${item.id}"
+            >+</button>
+
+          </div>
+
+        </div>
+
+        <button
+          class="ghost"
+          data-remove="${item.id}"
+          style="min-height:40px;padding:0 10px"
+        >
+          🗑️
+        </button>
+
+      </div>
+
+    `).join("")}
+
+    <div class="cart-total glass">
+
+      <div style="
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+      ">
+        <span>Total</span>
+        <strong>${money(cartTotal())}</strong>
+      </div>
+
+      <button
+        class="primary full"
+        id="checkoutButton"
+      >
+        🚀 Passer commande
+      </button>
+
+    </div>
+  `;
+
+  box.querySelectorAll("[data-minus]").forEach(btn=>{
+    btn.onclick=()=>{
+      changeQty(btn.dataset.minus,-1);
+    };
+  });
+
+  box.querySelectorAll("[data-plus]").forEach(btn=>{
+    btn.onclick=()=>{
+      changeQty(btn.dataset.plus,1);
+    };
+  });
+
+  box.querySelectorAll("[data-remove]").forEach(btn=>{
+    btn.onclick=()=>{
+      removeFromCart(btn.dataset.remove);
+    };
+  });
+
+  $("checkoutButton").onclick=()=>{
+    goTo("commande");
+  };
+}
+
+/* =========================================================
+   COMMANDE
+========================================================= */
+
+function prepareCheckout(){
+
+  if(!cart.length){
+    notify("Ton panier est vide.");
+    goTo("boutique");
+    return;
+  }
+
+  if(profile){
+
+    if($("orderFirstName"))
+      $("orderFirstName").value =
+        profile.first_name || "";
+
+    if($("orderLastName"))
+      $("orderLastName").value =
+        profile.last_name || "";
+
+    if($("orderPhone"))
+      $("orderPhone").value =
+        profile.phone || "";
+  }
+}
+
+function getOrderData(){
+
+  return {
+    first_name:$("orderFirstName")?.value.trim() || "",
+    last_name:$("orderLastName")?.value.trim() || "",
+    phone:$("orderPhone")?.value.trim() || ""
+  };
+}
+
+function validateOrder(){
+
+  if(!currentUser){
+    notify("Connecte-toi avant de commander.");
+    goTo("compte");
+    return false;
+  }
+
+  if(!cart.length){
+    notify("Ton panier est vide.");
+    goTo("boutique");
+    return false;
+  }
+
+  const data = getOrderData();
+
+  if(!data.first_name || !data.last_name || !data.phone){
+    notify("Prénom, nom et téléphone sont obligatoires.");
+    return false;
+  }
+
+  if(!profile?.phone_verified){
+    notify("Ton numéro doit être vérifié.");
+    return false;
+  }
+
+  return true;
+}
+
+async function createOrder(method){
+
+  if(!validateOrder()) return;
+
+  const data = getOrderData();
+
+  const items = cart.map(item=>({
+    id:item.id,
+    name:item.name,
+    price:item.price,
+    quantity:item.qty,
+    image:item.image || ""
   }));
 
   const total = cartTotal();
 
-  const orderPayload = {
-    user_id: currentUser.id,
-    first_name,
-    last_name,
-    phone,
-    phone_verified: true,
-    items,
-    total,
-    method,
-    status: "new"
-  };
-
-  const { data, error } = await supabase
+  const {error} = await supabase
     .from("orders")
-    .insert(orderPayload)
-    .select()
-    .single();
+    .insert({
+      user_id:currentUser.id,
+      first_name:data.first_name,
+      last_name:data.last_name,
+      phone:data.phone,
+      phone_verified:true,
+      items,
+      total,
+      method,
+      status:"new"
+    });
 
-  if (error) {
-    toast("Commande : " + error.message);
+  if(error){
+    console.error(error);
+    notify("Impossible d'enregistrer la commande.");
     return;
   }
 
   await supabase
     .from("profiles")
     .upsert({
-      id: currentUser.id,
-      first_name,
-      last_name,
-      phone,
-      phone_verified: true
-    }, { onConflict: "id" });
+      id:currentUser.id,
+      first_name:data.first_name,
+      last_name:data.last_name,
+      phone:data.phone,
+      phone_verified:true
+    });
 
-  if (method === "whatsapp") {
-    const lines = items.map(i => `• ${i.name} × ${i.qty} — ${money(i.price * i.qty)}`);
+  await loadProfile();
 
-    const message =
-      `🛍️ *Nouvelle commande MHD SHOP*\n\n` +
-      `👤 ${first_name} ${last_name}\n` +
-      `📞 ${phone}\n\n` +
-      `${lines.join("\n")}\n\n` +
-      `💰 *Total : ${money(total)}*\n` +
-      `🆔 Commande : ${data?.id || "site"}`;
+  if(method === "whatsapp"){
 
-    openWhatsApp(message);
+    const text =
+      `🛍️ MHD SHOP — Nouvelle commande%0A%0A` +
+      `👤 ${encodeURIComponent(data.first_name)} ${encodeURIComponent(data.last_name)}%0A` +
+      `📱 ${encodeURIComponent(data.phone)}%0A%0A` +
+      `📦 Produits :%0A` +
+      items.map(item=>
+        `• ${encodeURIComponent(item.name)} x${item.quantity} — ${encodeURIComponent(money(item.price * item.quantity))}`
+      ).join("%0A") +
+      `%0A%0A💰 Total : ${encodeURIComponent(money(total))}`;
+
+    window.open(
+      `https://wa.me/${WHATSAPP}?text=${text}`,
+      "_blank"
+    );
   }
 
   cart = [];
   saveCart();
-  renderCart();
 
-  toast("Commande enregistrée ✅");
-  showPage("accueil");
+  notify("Commande envoyée ✅");
+
+  setTimeout(()=>{
+    goTo("accueil");
+  },600);
 }
 
-/* ---------- ADMIN ---------- */
+$("sendOtp")?.addEventListener("click",sendPhoneOTP);
+$("verifyOtp")?.addEventListener("click",verifyPhone);
 
-async function openAdmin() {
-  if (!currentUser) {
-    toast("Connecte-toi pour accéder à Admin.");
-    showPage("compte");
-    return;
-  }
-
-  await checkAdmin();
-
-  if (!isAdmin) {
-    toast("Accès administrateur refusé.");
-    showPage("accueil");
-    return;
-  }
-
-  await loadOrders();
-  renderAdminProducts();
-}
-
-document.addEventListener("click", (e) => {
-  const tab = e.target.closest("[data-admin-tab]");
-  if (!tab) return;
-
-  document.querySelectorAll(".admin-tab").forEach(b => b.classList.remove("active"));
-  tab.classList.add("active");
-
-  const productsTab = $("adminProductsTab");
-  const ordersTab = $("adminOrdersTab");
-
-  if (tab.dataset.adminTab === "products") {
-    productsTab?.classList.remove("hidden");
-    ordersTab?.classList.add("hidden");
-  } else {
-    productsTab?.classList.add("hidden");
-    ordersTab?.classList.remove("hidden");
-    loadOrders();
-  }
+$("orderOnSite")?.addEventListener("click",()=>{
+  createOrder("site");
 });
 
-async function loadOrders() {
-  if (!isAdmin) return;
-
-  const { data, error } = await supabase
-    .from("orders")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    console.warn("Orders:", error.message);
-    orders = [];
-    renderAdminOrders();
-    return;
-  }
-
-  orders = data || [];
-  renderAdminOrders();
-}
-
-function renderAdminOrders() {
-  const box = $("adminOrders");
-  const badge = $("orderBadge");
-  const alert = $("adminOrderAlert");
-
-  const newCount = orders.filter(o => o.status === "new").length;
-
-  if (badge) badge.textContent = newCount;
-  if (alert) {
-    alert.classList.toggle("hidden", newCount === 0);
-    alert.textContent = newCount
-      ? `🔔 ${newCount} nouvelle${newCount > 1 ? "s" : ""} commande${newCount > 1 ? "s" : ""} à consulter.`
-      : "";
-  }
-
-  if (!box) return;
-
-  if (!orders.length) {
-    box.innerHTML = `<div class="panel">Aucune commande pour le moment.</div>`;
-    return;
-  }
-
-  box.innerHTML = orders.map(order => {
-    const items = Array.isArray(order.items) ? order.items : [];
-    const date = order.created_at
-      ? new Date(order.created_at).toLocaleString("fr-FR")
-      : "";
-
-    return `
-      <article class="panel" style="margin-bottom:12px">
-        <div style="display:flex;justify-content:space-between;gap:10px">
-          <div>
-            <b>Commande #${esc(order.id)}</b>
-            <div style="color:var(--muted);font-size:12px;margin-top:4px">${esc(date)}</div>
-          </div>
-          <span style="color:${order.status === "new" ? "var(--red)" : "var(--green)"};font-weight:900">
-            ${esc(order.status || "new")}
-          </span>
-        </div>
-
-        <div style="margin-top:13px">
-          <b>${esc(order.first_name)} ${esc(order.last_name)}</b><br>
-          📞 ${esc(order.phone)}
-        </div>
-
-        <div style="margin-top:13px;color:var(--muted);font-size:13px">
-          ${items.map(i => `${esc(i.name)} × ${i.qty}`).join("<br>")}
-        </div>
-
-        <div style="margin-top:13px;font-size:19px;font-weight:950;color:var(--red)">
-          ${money(order.total)}
-        </div>
-
-        <div style="display:flex;gap:8px;margin-top:13px">
-          <button class="secondary" data-order-status="${esc(order.id)}" data-status="processing">En cours</button>
-          <button class="primary" data-order-status="${esc(order.id)}" data-status="completed">Terminée</button>
-        </div>
-      </article>
-    `;
-  }).join("");
-}
-
-document.addEventListener("click", async (e) => {
-  const statusBtn = e.target.closest("[data-order-status]");
-  if (!statusBtn) return;
-
-  const id = statusBtn.dataset.orderStatus;
-  const status = statusBtn.dataset.status;
-
-  const { error } = await supabase
-    .from("orders")
-    .update({ status })
-    .eq("id", id);
-
-  if (error) {
-    toast(error.message);
-    return;
-  }
-
-  await loadOrders();
-  toast("Commande mise à jour ✅");
+$("orderOnWhatsApp")?.addEventListener("click",()=>{
+  createOrder("whatsapp");
 });
 
-/* ---------- ADMIN PRODUCTS ---------- */
+/* =========================================================
+   ADMIN
+========================================================= */
 
-$("pImage")?.addEventListener("change", async (e) => {
-  const file = e.target.files?.[0];
-  if (!file) return;
+async function isAdmin(){
 
-  try {
-    editingImage = await resizeImage(file, 1000, 0.82);
-    if ($("imagePreview")) {
-      $("imagePreview").innerHTML = `<img src="${esc(editingImage)}" alt="Aperçu">`;
+  if(!currentUser) return false;
+
+  const {data,error} = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id",currentUser.id)
+    .maybeSingle();
+
+  if(error){
+    console.error(error);
+    return false;
+  }
+
+  return data?.role === "admin";
+}
+
+async function openAdmin(){
+
+  if(!currentUser){
+    notify("Connecte-toi avec le compte administrateur.");
+    goTo("compte");
+    return;
+  }
+
+  const admin = await isAdmin();
+
+  if(!admin){
+    notify("Accès administrateur refusé.");
+    goTo("accueil");
+    return;
+  }
+
+  loadAdminProducts();
+  loadAdminOrders();
+}
+
+/* Navigation admin */
+
+document.querySelectorAll("[data-admin-tab]").forEach(tab=>{
+
+  tab.addEventListener("click",()=>{
+
+    document.querySelectorAll("[data-admin-tab]")
+      .forEach(x=>x.classList.remove("active"));
+
+    tab.classList.add("active");
+
+    const productsTab = $("adminProductsTab");
+    const ordersTab = $("adminOrdersTab");
+
+    if(tab.dataset.adminTab === "products"){
+      productsTab?.classList.remove("hidden");
+      ordersTab?.classList.add("hidden");
+    }else{
+      productsTab?.classList.add("hidden");
+      ordersTab?.classList.remove("hidden");
+      loadAdminOrders();
     }
-  } catch {
-    toast("Impossible de lire cette image.");
-  }
+
+  });
+
 });
 
-$("saveProduct")?.addEventListener("click", saveProduct);
-$("cancelEdit")?.addEventListener("click", resetProductForm);
+$("adminExit")?.addEventListener("click",()=>{
+  goTo("accueil");
+});
 
-async function saveProduct() {
-  if (!isAdmin) {
-    toast("Accès refusé.");
+/* =========================================================
+   ADMIN PRODUITS
+========================================================= */
+
+async function loadAdminProducts(){
+
+  const box = $("adminProducts");
+
+  if(!box) return;
+
+  const {data,error} = await supabase
+    .from("products")
+    .select("*")
+    .order("created_at",{ascending:false});
+
+  if(error){
+    console.error(error);
+    box.innerHTML = `
+      <div class="panel">
+        Impossible de charger les produits.
+      </div>
+    `;
     return;
   }
+
+  const list = data || [];
+
+  if(!list.length){
+    box.innerHTML = `
+      <div class="panel">
+        Aucun produit pour le moment.
+      </div>
+    `;
+    return;
+  }
+
+  box.innerHTML = list.map(product=>`
+
+    <div class="admin-product">
+
+      ${
+        product.image
+          ? `<img src="${product.image}" alt="">`
+          : `<div style="
+              width:65px;
+              height:65px;
+              border-radius:14px;
+              display:grid;
+              place-items:center;
+              background:#101827;
+              font-size:25px
+            ">🎮</div>`
+      }
+
+      <div class="admin-product-info">
+
+        <b>${escapeHTML(product.name)}</b>
+
+        <small>
+          ${escapeHTML(product.category)}
+          · ${money(product.price)}
+        </small>
+
+        <small>
+          ${product.available ? "🟢 Disponible" : "🔴 Indisponible"}
+        </small>
+
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:6px">
+
+        <button
+          class="ghost"
+          data-edit-product="${product.id}"
+          style="min-height:36px;padding:0 9px"
+        >
+          ✏️
+        </button>
+
+        <button
+          class="ghost"
+          data-delete-product="${product.id}"
+          style="min-height:36px;padding:0 9px"
+        >
+          🗑️
+        </button>
+
+      </div>
+
+    </div>
+
+  `).join("");
+
+  box.querySelectorAll("[data-edit-product]").forEach(btn=>{
+    btn.onclick=()=>{
+      editProduct(btn.dataset.editProduct);
+    };
+  });
+
+  box.querySelectorAll("[data-delete-product]").forEach(btn=>{
+    btn.onclick=()=>{
+      deleteProduct(btn.dataset.deleteProduct);
+    };
+  });
+}
+
+/* Image */
+
+$("pImage")?.addEventListener("change",event=>{
+
+  const file = event.target.files?.[0];
+
+  if(!file) return;
+
+  const reader = new FileReader();
+
+  reader.onload = ()=>{
+    currentImage = reader.result;
+
+    const preview = $("imagePreview");
+
+    if(preview){
+      preview.innerHTML =
+        `<img src="${currentImage}" alt="Prévisualisation">`;
+    }
+  };
+
+  reader.readAsDataURL(file);
+});
+
+/* Save product */
+
+$("saveProduct")?.addEventListener("click",saveProduct);
+
+async function saveProduct(){
 
   const name = $("pName")?.value.trim();
-  const category = $("pCategory")?.value.trim() || "Autre";
+  const category = $("pCategory")?.value.trim();
   const price = Number($("pPrice")?.value);
   const available = $("pAvailable")?.value === "true";
-  const editId = $("editId")?.value;
 
-  if (!name || !price || price <= 0) {
-    toast("Nom et prix valides obligatoires.");
+  if(!name || !category || !price){
+    notify("Remplis tous les champs obligatoires.");
     return;
   }
 
@@ -1023,327 +1353,451 @@ async function saveProduct() {
     name,
     category,
     price,
-    image: editingImage || null,
     available
   };
 
+  if(currentImage){
+    payload.image = currentImage;
+  }
+
   let result;
 
-  if (editId) {
+  if(editingProductId){
+
     result = await supabase
       .from("products")
       .update(payload)
-      .eq("id", editId);
-  } else {
+      .eq("id",editingProductId);
+
+  }else{
+
     result = await supabase
       .from("products")
       .insert(payload);
   }
 
-  if (result.error) {
-    toast(result.error.message);
+  if(result.error){
+    console.error(result.error);
+    notify("Impossible d'enregistrer le produit.");
     return;
   }
 
-  toast(editId ? "Produit modifié ✅" : "Produit ajouté ✅");
+  notify(
+    editingProductId
+      ? "Produit modifié ✅"
+      : "Produit ajouté ✅"
+  );
+
   resetProductForm();
   await loadProducts();
+  await loadAdminProducts();
 }
 
-function renderAdminProducts() {
-  const box = $("adminProducts");
-  if (!box) return;
+async function editProduct(id){
 
-  if (!isAdmin) {
-    box.innerHTML = `<div class="panel">Connecte-toi avec le compte administrateur.</div>`;
+  const {data,error} = await supabase
+    .from("products")
+    .select("*")
+    .eq("id",id)
+    .single();
+
+  if(error || !data){
+    notify("Produit introuvable.");
     return;
   }
 
-  box.innerHTML = products.length
-    ? products.map(p => `
-      <div class="admin-item">
-        <div class="cart-thumb">
-          ${p.image ? `<img src="${esc(p.image)}" alt="">` : "🎮"}
-        </div>
-        <div class="grow">
-          <b>${esc(p.name)}</b>
-          <div style="color:var(--red);font-weight:900">${money(p.price)}</div>
-          <small style="color:var(--muted)">${esc(p.category)} · ${p.available ? "Disponible" : "Indisponible"}</small>
-        </div>
-        <button class="secondary" data-edit-product="${esc(p.id)}">✏️</button>
-        <button class="danger" data-delete-product="${esc(p.id)}">🗑️</button>
+  editingProductId = id;
+
+  $("formTitle").textContent = "Modifier le produit";
+  $("pName").value = data.name || "";
+  $("pCategory").value = data.category || "";
+  $("pPrice").value = data.price || "";
+  $("pAvailable").value =
+    data.available ? "true" : "false";
+
+  currentImage = data.image || null;
+
+  $("imagePreview").innerHTML =
+    data.image
+      ? `<img src="${data.image}" alt="">`
+      : "Aucune photo";
+
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+
+async function deleteProduct(id){
+
+  if(!confirm("Supprimer ce produit ?")) return;
+
+  const {error} = await supabase
+    .from("products")
+    .delete()
+    .eq("id",id);
+
+  if(error){
+    console.error(error);
+    notify("Impossible de supprimer.");
+    return;
+  }
+
+  notify("Produit supprimé.");
+  await loadProducts();
+  await loadAdminProducts();
+}
+
+$("cancelEdit")?.addEventListener("click",resetProductForm);
+
+function resetProductForm(){
+
+  editingProductId = null;
+  currentImage = null;
+
+  if($("formTitle"))
+    $("formTitle").textContent = "Ajouter un produit";
+
+  if($("pName")) $("pName").value="";
+  if($("pCategory")) $("pCategory").value="";
+  if($("pPrice")) $("pPrice").value="";
+  if($("pImage")) $("pImage").value="";
+  if($("pAvailable")) $("pAvailable").value="true";
+
+  if($("imagePreview"))
+    $("imagePreview").textContent =
+      "Aucune photo sélectionnée";
+}
+
+/* =========================================================
+   ADMIN COMMANDES
+========================================================= */
+
+async function loadAdminOrders(){
+
+  const box = $("adminOrders");
+
+  if(!box) return;
+
+  const admin = await isAdmin();
+
+  if(!admin) return;
+
+  const {data,error} = await supabase
+    .from("orders")
+    .select("*")
+    .order("created_at",{ascending:false});
+
+  if(error){
+    console.error(error);
+    box.innerHTML = `
+      <div class="panel">
+        Impossible de charger les commandes.
       </div>
-    `).join("")
-    : `<div class="panel">Aucun produit.</div>`;
-}
-
-document.addEventListener("click", async (e) => {
-  const edit = e.target.closest("[data-edit-product]");
-  if (edit) {
-    const p = findProduct(edit.dataset.editProduct);
-    if (!p) return;
-
-    $("editId").value = p.id;
-    $("pName").value = p.name;
-    $("pCategory").value = p.category;
-    $("pPrice").value = p.price;
-    $("pAvailable").value = String(p.available);
-    editingImage = p.image || "";
-
-    if ($("formTitle")) $("formTitle").textContent = "Modifier le produit";
-    if ($("imagePreview")) {
-      $("imagePreview").innerHTML = editingImage
-        ? `<img src="${esc(editingImage)}" alt="Aperçu">`
-        : "Aucune photo sélectionnée";
-    }
-
-    showPage("admin");
+    `;
     return;
   }
 
-  const del = e.target.closest("[data-delete-product]");
-  if (del) {
-    if (!confirm("Supprimer ce produit ?")) return;
+  const orders = data || [];
 
-    const { error } = await supabase
-      .from("products")
-      .delete()
-      .eq("id", del.dataset.deleteProduct);
+  updateOrderBadge(orders);
 
-    if (error) {
-      toast(error.message);
-      return;
-    }
-
-    toast("Produit supprimé.");
-    await loadProducts();
+  if(!orders.length){
+    box.innerHTML = `
+      <div class="panel">
+        <h3>Aucune commande 📦</h3>
+        <p style="color:#9ca8bd">
+          Les nouvelles commandes apparaîtront ici.
+        </p>
+      </div>
+    `;
+    return;
   }
-});
 
-function resetProductForm() {
-  if ($("editId")) $("editId").value = "";
-  if ($("pName")) $("pName").value = "";
-  if ($("pCategory")) $("pCategory").value = "";
-  if ($("pPrice")) $("pPrice").value = "";
-  if ($("pImage")) $("pImage").value = "";
-  if ($("pAvailable")) $("pAvailable").value = "true";
-  if ($("formTitle")) $("formTitle").textContent = "Ajouter un produit";
-  if ($("imagePreview")) $("imagePreview").textContent = "Aucune photo sélectionnée";
-  editingImage = "";
-}
+  box.innerHTML = orders.map(order=>`
 
-function resizeImage(file, maxSize = 1000, quality = .82) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
+    <div class="panel glass">
 
-    reader.onload = () => {
-      const img = new Image();
+      <div style="
+        display:flex;
+        justify-content:space-between;
+        gap:10px;
+      ">
 
-      img.onload = () => {
-        const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
-        const canvas = document.createElement("canvas");
+        <div>
+          <small style="color:#63baff">
+            COMMANDE #${order.id}
+          </small>
 
-        canvas.width = Math.round(img.width * scale);
-        canvas.height = Math.round(img.height * scale);
+          <h3 style="margin:5px 0">
+            ${escapeHTML(order.first_name)}
+            ${escapeHTML(order.last_name)}
+          </h3>
+        </div>
 
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        <b style="color:#62b8ff">
+          ${money(order.total)}
+        </b>
 
-        resolve(canvas.toDataURL("image/jpeg", quality));
+      </div>
+
+      <p style="color:#9ca8bd;font-size:12px">
+        📱 ${escapeHTML(order.phone)}
+      </p>
+
+      <p style="color:#9ca8bd;font-size:12px">
+        🛍️ ${escapeHTML(order.method)}
+      </p>
+
+      <div style="
+        margin:12px 0;
+        padding:12px;
+        border-radius:15px;
+        background:rgba(255,255,255,.045);
+      ">
+        ${(order.items || []).map(item=>`
+          <div style="
+            display:flex;
+            justify-content:space-between;
+            margin:5px 0;
+            font-size:12px;
+          ">
+            <span>
+              ${escapeHTML(item.name)} ×${item.quantity}
+            </span>
+            <b>
+              ${money(Number(item.price)*Number(item.quantity))}
+            </b>
+          </div>
+        `).join("")}
+      </div>
+
+      <select
+        data-order-status="${order.id}"
+      >
+        <option value="new" ${order.status==="new"?"selected":""}>
+          🆕 Nouvelle
+        </option>
+        <option value="processing" ${order.status==="processing"?"selected":""}>
+          🔄 En traitement
+        </option>
+        <option value="completed" ${order.status==="completed"?"selected":""}>
+          ✅ Terminée
+        </option>
+      </select>
+
+    </div>
+
+  `).join("");
+
+  box.querySelectorAll("[data-order-status]")
+    .forEach(select=>{
+      select.onchange=()=>{
+        updateOrderStatus(
+          select.dataset.orderStatus,
+          select.value
+        );
       };
-
-      img.onerror = reject;
-      img.src = reader.result;
-    };
-
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+    });
 }
 
-/* ---------- MHD IA ---------- */
+function updateOrderBadge(orders){
 
-function openAI() {
-  $("aiBox")?.classList.remove("hidden");
-  $("aiInput")?.focus();
+  const badge = $("orderBadge");
+
+  if(!badge) return;
+
+  const count = orders.filter(
+    order=>order.status === "new"
+  ).length;
+
+  badge.textContent = count;
+
+  const alert = $("adminOrderAlert");
+
+  if(alert){
+
+    if(count > 0){
+
+      alert.classList.remove("hidden");
+
+      alert.textContent =
+        `🔔 ${count} nouvelle${count>1?"s":""} commande${count>1?"s":""} !`;
+
+    }else{
+
+      alert.classList.add("hidden");
+
+    }
+  }
 }
 
-function closeAI() {
-  $("aiBox")?.classList.add("hidden");
+async function updateOrderStatus(id,status){
+
+  const {error} = await supabase
+    .from("orders")
+    .update({status})
+    .eq("id",id);
+
+  if(error){
+    console.error(error);
+    notify("Impossible de modifier la commande.");
+    return;
+  }
+
+  notify("Commande mise à jour ✅");
+  loadAdminOrders();
 }
 
-$("aiFloat")?.addEventListener("click", () => {
-  $("aiBox")?.classList.contains("hidden") ? openAI() : closeAI();
-});
+/* =========================================================
+   REALTIME COMMANDES
+========================================================= */
 
-$("aiClose")?.addEventListener("click", closeAI);
+supabase
+  .channel("mhd-orders-live")
+  .on(
+    "postgres_changes",
+    {
+      event:"*",
+      schema:"public",
+      table:"orders"
+    },
+    ()=>{
+      loadAdminOrders();
+    }
+  )
+  .subscribe();
 
-document.querySelectorAll("[data-ai]").forEach(btn => {
-  btn.addEventListener("click", () => aiAnswer(btn.dataset.ai));
-});
+/* =========================================================
+   MHD IA
+========================================================= */
 
-$("aiSend")?.addEventListener("click", sendAIMessage);
+function aiReply(text){
 
-$("aiInput")?.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") sendAIMessage();
-});
+  const q = text.toLowerCase();
 
-function addAIMessage(text, type = "bot") {
+  if(
+    q.includes("produit") ||
+    q.includes("boutique")
+  ){
+    return "🛍️ Tu peux voir tous les produits dans la Boutique.";
+  }
+
+  if(
+    q.includes("commande") ||
+    q.includes("acheter")
+  ){
+    return "📦 Ajoute un produit au panier puis appuie sur « Passer commande ».";
+  }
+
+  if(
+    q.includes("whatsapp") ||
+    q.includes("vendeur") ||
+    q.includes("support")
+  ){
+    return "💬 Le support vendeur est disponible au +221 78 748 81 99.";
+  }
+
+  if(
+    q.includes("prix") ||
+    q.includes("fcfa")
+  ){
+    return "💰 Les prix sont affichés directement sur chaque produit.";
+  }
+
+  return "🤖 Je peux t'aider avec les produits, les commandes, le panier ou le support.";
+}
+
+function addAIMessage(text,type="bot"){
+
   const box = $("aiMessages");
-  if (!box) return;
 
-  const div = document.createElement("div");
-  div.className = `ai-msg ${type}`;
-  div.textContent = text;
-  box.appendChild(div);
+  if(!box) return;
+
+  const message = document.createElement("div");
+
+  message.className =
+    `ai-msg ${type}`;
+
+  message.textContent = text;
+
+  box.appendChild(message);
   box.scrollTop = box.scrollHeight;
 }
 
-function sendAIMessage() {
+function sendAI(){
+
   const input = $("aiInput");
-  const text = input?.value.trim();
 
-  if (!text) return;
+  if(!input) return;
 
-  addAIMessage(text, "user");
-  input.value = "";
+  const text = input.value.trim();
 
-  setTimeout(() => {
-    const q = text.toLowerCase();
+  if(!text) return;
 
-    if (q.includes("produit") || q.includes("prix") || q.includes("acheter")) {
-      aiAnswer("produits");
-    } else if (q.includes("commande") || q.includes("commander") || q.includes("panier")) {
-      aiAnswer("commande");
-    } else if (q.includes("whatsapp") || q.includes("contact") || q.includes("vendeur")) {
-      aiAnswer("support");
-    } else {
-      addAIMessage("Je peux t'aider avec les produits, les commandes ou le support MHD SHOP. 🤖");
-    }
-  }, 350);
+  addAIMessage(text,"user");
+
+  input.value="";
+
+  setTimeout(()=>{
+    addAIMessage(aiReply(text),"bot");
+  },300);
 }
 
-function aiAnswer(type) {
-  if (type === "produits") {
-    const available = products.filter(p => p.available !== false);
-
-    if (!available.length) {
-      addAIMessage("Aucun produit disponible pour le moment.");
-      return;
-    }
-
-    const text = available.slice(0, 5)
-      .map(p => `${p.name} — ${money(p.price)}`)
-      .join(" • ");
-
-    addAIMessage(`Voici quelques produits : ${text}`);
-  }
-
-  if (type === "commande") {
-    addAIMessage("Ajoute tes produits au panier, connecte-toi, puis vérifie ton numéro avant de choisir Site ou WhatsApp. 📦");
-  }
-
-  if (type === "support") {
-    addAIMessage("Le vendeur est joignable sur WhatsApp au +221 78 748 81 99. 💬");
-  }
-}
-
-/* ---------- WHATSAPP ---------- */
-
-function openWhatsApp(message) {
-  const url = `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(message)}`;
-  window.open(url, "_blank", "noopener");
-}
-
-/* ---------- THEME ---------- */
-
-function applyTheme() {
-  const theme = localStorage.getItem("mhd_theme") || "dark";
-  document.body.classList.toggle("light", theme === "light");
-}
-
-function toggleTheme() {
-  const light = !document.body.classList.contains("light");
-  localStorage.setItem("mhd_theme", light ? "light" : "dark");
-  applyTheme();
-}
-
-/* ---------- TOAST ---------- */
-
-function toast(message) {
-  let box = document.getElementById("mhdToast");
-
-  if (!box) {
-    box = document.createElement("div");
-    box.id = "mhdToast";
-    Object.assign(box.style, {
-      position:"fixed",
-      left:"50%",
-      bottom:"94px",
-      transform:"translateX(-50%) translateY(12px)",
-      zIndex:"9999",
-      maxWidth:"calc(100vw - 30px)",
-      padding:"12px 16px",
-      borderRadius:"14px",
-      background:"#101a2b",
-      color:"#fff",
-      border:"1px solid rgba(0,200,255,.35)",
-      boxShadow:"0 14px 35px rgba(0,0,0,.35)",
-      fontSize:"13px",
-      fontWeight:"800",
-      opacity:"0",
-      transition:".2s ease",
-      textAlign:"center"
-    });
-    document.body.appendChild(box);
-  }
-
-  box.textContent = message;
-  box.style.opacity = "1";
-  box.style.transform = "translateX(-50%) translateY(0)";
-
-  clearTimeout(box._timer);
-  box._timer = setTimeout(() => {
-    box.style.opacity = "0";
-    box.style.transform = "translateX(-50%) translateY(12px)";
-  }, 2600);
-}
-
-/* ---------- REALTIME ADMIN ORDERS ---------- */
-
-function subscribeToOrders() {
-  supabase
-    .channel("mhd-shop-orders")
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "orders" },
-      () => {
-        if (isAdmin) loadOrders();
-      }
-    )
-    .subscribe();
-}
-
-/* ---------- START ---------- */
-
-applyTheme();
-renderCartCount();
-renderCart();
-loadProducts();
-getSession();
-subscribeToOrders();
-
-supabase.auth.onAuthStateChange(async (_event, session) => {
-  currentUser = session?.user || null;
-
-  /*
-    On attend un court instant pour éviter de faire plusieurs requêtes
-    simultanées lors du retour d'un OAuth.
-  */
-  setTimeout(async () => {
-    await loadProfile();
-    await checkAdmin();
-    renderAccount();
-    prefillOrder();
-  }, 100);
+$("aiFloat")?.addEventListener("click",()=>{
+  $("aiBox")?.classList.toggle("hidden");
 });
+
+$("aiClose")?.addEventListener("click",()=>{
+  $("aiBox")?.classList.add("hidden");
+});
+
+$("aiSend")?.addEventListener("click",sendAI);
+
+$("aiInput")?.addEventListener("keydown",event=>{
+  if(event.key === "Enter"){
+    event.preventDefault();
+    sendAI();
+  }
+});
+
+document.querySelectorAll("[data-ai]").forEach(button=>{
+
+  button.onclick=()=>{
+
+    const type = button.dataset.ai;
+
+    if(type === "produits"){
+      addAIMessage(
+        "🛍️ Ouvre Boutique pour découvrir les produits disponibles."
+      );
+    }
+
+    if(type === "commande"){
+      addAIMessage(
+        "📦 Ajoute tes produits au panier puis passe commande."
+      );
+    }
+
+    if(type === "support"){
+      addAIMessage(
+        "💬 Support vendeur : +221 78 748 81 99."
+      );
+    }
+
+  };
+
+});
+
+/* =========================================================
+   DÉMARRAGE
+========================================================= */
+
+async function init(){
+
+  updateCartCount();
+
+  await loadUser();
+  await loadProducts();
+
+  goTo("accueil");
+}
+
+init();
