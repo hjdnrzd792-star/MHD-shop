@@ -7,38 +7,10 @@ const db=supabase.createClient(
 );
 
 const demo=[
-  {
-    id:"d1",
-    name:"Pack Gaming — démo",
-    category:"Gaming",
-    price:5000,
-    image:"🎮",
-    available:true
-  },
-  {
-    id:"d2",
-    name:"Offre eFootball — démo",
-    category:"eFootball",
-    price:3000,
-    image:"⚽",
-    available:true
-  },
-  {
-    id:"d3",
-    name:"Produit digital — démo",
-    category:"Digital",
-    price:2500,
-    image:"💻",
-    available:true
-  },
-  {
-    id:"d4",
-    name:"Pack Premium — démo",
-    category:"Premium",
-    price:7500,
-    image:"⭐",
-    available:true
-  }
+  {id:"d1",name:"Pack Gaming — démo",category:"Gaming",price:5000,image:"🎮",available:true},
+  {id:"d2",name:"Offre eFootball — démo",category:"eFootball",price:3000,image:"⚽",available:true},
+  {id:"d3",name:"Produit digital — démo",category:"Digital",price:2500,image:"💻",available:true},
+  {id:"d4",name:"Pack Premium — démo",category:"Premium",price:7500,image:"⭐",available:true}
 ];
 
 let products=[];
@@ -48,12 +20,63 @@ let session=null;
 let isAdmin=false;
 let editingImage="";
 
-
 const $=x=>document.querySelector(x);
 
 const money=n=>
   new Intl.NumberFormat("fr-FR").format(n)+" FCFA";
 
+
+/* =========================
+   THÈME
+========================= */
+
+function applyTheme(){
+
+  const theme=
+    localStorage.getItem("mhd_theme")||"dark";
+
+  document.body.classList.toggle(
+    "light",
+    theme==="light"
+  );
+
+  updateThemeButton();
+}
+
+
+function toggleTheme(){
+
+  const isLight=
+    document.body.classList.contains("light");
+
+  localStorage.setItem(
+    "mhd_theme",
+    isLight?"dark":"light"
+  );
+
+  applyTheme();
+}
+
+
+function updateThemeButton(){
+
+  const button=$("#themeToggle");
+
+  if(!button)return;
+
+  const isLight=
+    document.body.classList.contains("light");
+
+  button.textContent=
+    isLight
+    ?"🌙 Passer au mode nuit"
+    :"☀️ Passer au mode clair";
+}
+
+
+/* =========================
+   PANIER
+========================= */
 
 function saveCart(){
 
@@ -78,20 +101,67 @@ function count(){
 }
 
 
+/*
+ Nettoie les anciens produits
+ qui n'existent plus.
+*/
+function cleanCart(){
+
+  const validIds=
+    new Set(
+      products.map(p=>String(p.id))
+    );
+
+  let changed=false;
+
+  Object.keys(cart).forEach(id=>{
+
+    if(!validIds.has(String(id))){
+
+      delete cart[id];
+
+      changed=true;
+    }
+  });
+
+
+  if(changed){
+
+    localStorage.setItem(
+      "mhd_cart",
+      JSON.stringify(cart)
+    );
+  }
+
+
+  count();
+}
+
+
+/* =========================
+   NAVIGATION
+========================= */
+
 function go(id){
 
   if(id==="admin"&&!isAdmin){
 
-    alert("Accès réservé à l’administrateur.");
+    alert(
+      "Accès réservé à l’administrateur."
+    );
 
     go("compte");
 
     return;
   }
 
+
   document
     .querySelectorAll(".page")
-    .forEach(x=>x.classList.remove("active"));
+    .forEach(x=>
+      x.classList.remove("active")
+    );
+
 
   const page=$("#"+id);
 
@@ -102,11 +172,15 @@ function go(id){
     scrollTo(0,0);
   }
 
+
   if(id==="panier"){
+
     renderCart();
   }
 
+
   if(id==="admin"){
+
     renderAdmin();
   }
 }
@@ -124,6 +198,10 @@ document.addEventListener("click",e=>{
 });
 
 
+/* =========================
+   PRODUITS
+========================= */
+
 function cats(){
 
   return[
@@ -132,7 +210,6 @@ function cats(){
       products.map(p=>p.category)
     )
   ];
-
 }
 
 
@@ -142,13 +219,16 @@ function renderCats(){
 
   if(!el)return;
 
-  el.innerHTML=cats()
-    .map(c=>
-      `<button class="chip"
-      onclick="setCat(${JSON.stringify(c)})">
-      ${c}
-      </button>`
-    )
+  el.innerHTML=
+    cats()
+    .map(c=>`
+      <button
+        class="chip"
+        onclick="setCat(${JSON.stringify(c)})"
+      >
+        ${c}
+      </button>
+    `)
     .join("");
 }
 
@@ -157,15 +237,16 @@ function imageHTML(image){
 
   if(!image){
 
-    return `<span>📦</span>`;
+    return "<span>📦</span>";
   }
+
 
   if(
     image.startsWith("http")||
     image.startsWith("data:image/")
   ){
 
-    return `
+    return`
       <img
         src="${image}"
         alt="Produit"
@@ -174,13 +255,14 @@ function imageHTML(image){
     `;
   }
 
-  return `<span>${image}</span>`;
+
+  return`<span>${image}</span>`;
 }
 
 
 function card(p){
 
-  return `
+  return`
     <article class="card">
 
       <div class="product-image">
@@ -202,7 +284,9 @@ function card(p){
         ${p.available?"":"disabled"}
         onclick="add('${String(p.id).replace(/'/g,"\\'")}')"
       >
-        ${p.available?"Ajouter au panier":"Indisponible"}
+        ${p.available
+          ?"Ajouter au panier"
+          :"Indisponible"}
       </button>
 
     </article>
@@ -212,17 +296,19 @@ function card(p){
 
 function render(){
 
-  const search=$("#search");
-
   const q=
-    (search?.value||"")
+    ($("#search")?.value||"")
     .toLowerCase()
     .trim();
 
-  const arr=products.filter(p=>
-    (active==="Tous"||p.category===active)&&
-    (!q||p.name.toLowerCase().includes(q))
-  );
+
+  const arr=
+    products.filter(p=>
+      (active==="Tous"||
+       p.category===active)&&
+      (!q||
+       p.name.toLowerCase().includes(q))
+    );
 
 
   const productBox=$("#products");
@@ -249,7 +335,6 @@ function render(){
 
 
   renderCats();
-
 }
 
 
@@ -260,6 +345,10 @@ function setCat(c){
   render();
 }
 
+
+/* =========================
+   ACTIONS PANIER
+========================= */
 
 function add(id){
 
@@ -277,10 +366,12 @@ function change(id,d){
 
   cart[id]=(cart[id]||0)+d;
 
+
   if(cart[id]<=0){
 
     delete cart[id];
   }
+
 
   saveCart();
 
@@ -294,20 +385,31 @@ function renderCart(){
 
   if(!box)return;
 
-  const ids=Object.keys(cart);
+
+  cleanCart();
+
+
+  const ids=
+    Object.keys(cart);
+
 
   if(!ids.length){
 
     box.innerHTML=`
       <div class="panel">
 
-        <p>Ton panier est vide.</p>
+        <h2>Ton panier est vide 🛒</h2>
+
+        <p>
+          Ajoute un produit pour commencer
+          ta commande.
+        </p>
 
         <button
           class="primary"
           data-go="boutique"
         >
-          Voir la boutique
+          Découvrir la boutique
         </button>
 
       </div>
@@ -320,56 +422,57 @@ function renderCart(){
   let total=0;
 
 
-  const rows=ids.map(id=>{
+  const rows=
+    ids.map(id=>{
 
-    const p=
-      products.find(
-        x=>String(x.id)===String(id)
-      );
+      const p=
+        products.find(
+          x=>String(x.id)===String(id)
+        );
 
-    const q=cart[id];
-
-    if(!p)return"";
-
-
-    total+=p.price*q;
+      const q=cart[id];
 
 
-    return `
-      <div class="admin-item">
+      if(!p)return"";
 
-        <div class="grow">
 
-          <b>${p.name}</b>
+      total+=p.price*q;
 
-          <br>
 
-          ${money(p.price)}
+      return`
+        <div class="admin-item">
+
+          <div class="grow">
+
+            <b>${p.name}</b>
+
+            <br>
+
+            ${money(p.price)}
+
+          </div>
+
+          <button
+            onclick="change('${id}',-1)"
+          >
+            −
+          </button>
+
+          <b>${q}</b>
+
+          <button
+            onclick="change('${id}',1)"
+          >
+            +
+          </button>
 
         </div>
+      `;
 
-        <button
-          onclick="change('${id}',-1)"
-        >
-          −
-        </button>
-
-        <b>${q}</b>
-
-        <button
-          onclick="change('${id}',1)"
-        >
-          +
-        </button>
-
-      </div>
-    `;
-
-  }).join("");
+    }).join("");
 
 
   box.innerHTML=`
-
     ${rows}
 
     <div class="panel">
@@ -386,10 +489,13 @@ function renderCart(){
       </button>
 
     </div>
-
   `;
 }
 
+
+/* =========================
+   COMMANDE
+========================= */
 
 function orderWhatsApp(){
 
@@ -405,6 +511,9 @@ function orderWhatsApp(){
   }
 
 
+  cleanCart();
+
+
   if(!Object.keys(cart).length){
 
     alert("Ton panier est vide.");
@@ -417,6 +526,9 @@ function orderWhatsApp(){
     "Bonjour MHD SHOP, je souhaite commander :\n";
 
 
+  let total=0;
+
+
   Object.keys(cart).forEach(id=>{
 
     const p=
@@ -424,28 +536,20 @@ function orderWhatsApp(){
         x=>String(x.id)===String(id)
       );
 
+
     if(p){
 
+      const line=
+        p.price*cart[id];
+
+      total+=line;
+
+
       text+=
-        `- ${p.name} x${cart[id]} — ${money(p.price*cart[id])}\n`;
+        `- ${p.name} x${cart[id]} — ${money(line)}\n`;
     }
 
   });
-
-
-  const total=
-    Object.keys(cart).reduce((sum,id)=>{
-
-      const p=
-        products.find(
-          x=>String(x.id)===String(id)
-        );
-
-      return p
-        ?sum+p.price*cart[id]
-        :sum;
-
-    },0);
 
 
   text+=
@@ -453,19 +557,25 @@ function orderWhatsApp(){
 
 
   location.href=
-    `https://wa.me/221787488199?text=${encodeURIComponent(text)}`;
+    `https://wa.me/221787488199?text=${
+      encodeURIComponent(text)
+    }`;
 }
 
+
+/* =========================
+   COMPTE
+========================= */
 
 function authHTML(){
 
   if(!session){
 
-    return `
+    return`
 
       <p>
-        Crée un compte ou connecte-toi
-        pour pouvoir commander.
+        Crée ton compte pour enregistrer
+        tes informations et commander.
       </p>
 
       <button
@@ -500,19 +610,19 @@ function authHTML(){
         Se connecter
       </button>
 
-      <button
-        id="emailSignup"
-      >
+      <button id="emailSignup">
         Créer un compte
       </button>
 
       <p id="authMsg"></p>
 
+      ${themeHTML()}
+
     `;
   }
 
 
-  return `
+  return`
 
     <p>
       <b>
@@ -534,6 +644,36 @@ function authHTML(){
       Se déconnecter
     </button>
 
+    ${themeHTML()}
+
+  `;
+}
+
+
+function themeHTML(){
+
+  return`
+
+    <div class="theme-box">
+
+      <div class="theme-title">
+        🎨 Apparence
+      </div>
+
+      <div class="theme-description">
+        Choisis l'apparence que tu préfères.
+        Ton choix restera enregistré sur ton téléphone.
+      </div>
+
+      <button
+        class="theme-toggle"
+        id="themeToggle"
+      >
+        Changer de thème
+      </button>
+
+    </div>
+
   `;
 }
 
@@ -544,7 +684,23 @@ async function renderAuth(){
 
   if(!box)return;
 
-  box.innerHTML=authHTML();
+
+  box.innerHTML=
+    authHTML();
+
+
+  updateThemeButton();
+
+
+  const themeButton=
+    $("#themeToggle");
+
+
+  if(themeButton){
+
+    themeButton.onclick=
+      toggleTheme;
+  }
 
 
   if(!session){
@@ -563,7 +719,6 @@ async function renderAuth(){
     $("#logout").onclick=
       logout;
   }
-
 }
 
 
@@ -586,7 +741,6 @@ async function googleLogin(){
 
     alert(error.message);
   }
-
 }
 
 
@@ -613,22 +767,21 @@ async function emailAuth(signup){
 
   const r=
     signup
+
     ?await db.auth.signUp({
+      email,
+      password,
 
-        email,
-        password,
-
-        options:{
-          emailRedirectTo:
-          "https://hjdnrzd792-star.github.io/MHD-shop/"
-        }
-
-      })
+      options:{
+        emailRedirectTo:
+        "https://hjdnrzd792-star.github.io/MHD-shop/"
+      }
+    })
 
     :await db.auth.signInWithPassword({
-        email,
-        password
-      });
+      email,
+      password
+    });
 
 
   if(r.error){
@@ -644,7 +797,6 @@ async function emailAuth(signup){
     signup
     ?"Compte créé. Vérifie ton email si Supabase le demande."
     :"Connexion réussie.";
-
 }
 
 
@@ -655,6 +807,10 @@ async function logout(){
   go("accueil");
 }
 
+
+/* =========================
+   UTILISATEUR
+========================= */
 
 async function refreshUser(){
 
@@ -675,12 +831,15 @@ async function refreshUser(){
       .eq("id",session.user.id)
       .maybeSingle();
 
+
     isAdmin=
       p.data?.role==="admin";
   }
 
 
-  const adminButton=$("#adminOpen");
+  const adminButton=
+    $("#adminOpen");
+
 
   if(adminButton){
 
@@ -692,6 +851,10 @@ async function refreshUser(){
   await renderAuth();
 }
 
+
+/* =========================
+   PRODUITS SUPABASE
+========================= */
 
 async function loadProducts(){
 
@@ -720,6 +883,8 @@ async function loadProducts(){
   }
 
 
+  cleanCart();
+
   render();
 
   renderCart();
@@ -727,6 +892,10 @@ async function loadProducts(){
   count();
 }
 
+
+/* =========================
+   ADMIN
+========================= */
 
 async function renderAdmin(){
 
@@ -746,6 +915,7 @@ async function renderAdmin(){
 
 
   const list=r.data||[];
+
 
   $("#adminProducts").innerHTML=
     list.map(p=>`
@@ -767,18 +937,18 @@ async function renderAdmin(){
           <small
             class="${p.available?"available":"unavailable"}"
           >
-            ${p.available?"Disponible":"Indisponible"}
+            ${p.available
+              ?"Disponible"
+              :"Indisponible"}
           </small>
 
         </div>
-
 
         <button
           onclick="edit(${p.id})"
         >
           ✏️
         </button>
-
 
         <button
           class="danger"
@@ -792,7 +962,6 @@ async function renderAdmin(){
     `).join("")
     ||
     "<p>Aucun produit.</p>";
-
 }
 
 
@@ -807,13 +976,17 @@ function reset(){
 
   editingImage="";
 
-  const preview=$("#imagePreview");
+
+  const preview=
+    $("#imagePreview");
+
 
   if(preview){
 
     preview.innerHTML=
       "Aucune photo sélectionnée";
   }
+
 
   $("#formTitle").textContent=
     "Ajouter un produit";
@@ -856,7 +1029,9 @@ async function edit(id){
   editingImage=p.image||"";
 
 
-  const preview=$("#imagePreview");
+  const preview=
+    $("#imagePreview");
+
 
   if(preview){
 
@@ -867,7 +1042,6 @@ async function edit(id){
 
   $("#formTitle").textContent=
     "Modifier le produit";
-
 }
 
 
@@ -926,6 +1100,7 @@ function resizeImage(file){
         const ctx=
           canvas.getContext("2d");
 
+
         ctx.drawImage(
           img,
           0,
@@ -948,7 +1123,6 @@ function resizeImage(file){
       img.onerror=reject;
 
       img.src=e.target.result;
-
     };
 
 
@@ -957,7 +1131,6 @@ function resizeImage(file){
     reader.readAsDataURL(file);
 
   });
-
 }
 
 
@@ -966,14 +1139,13 @@ $("#pImage").onchange=async()=>{
   const file=
     $("#pImage").files[0];
 
+
   if(!file)return;
 
 
   if(!file.type.startsWith("image/")){
 
-    alert(
-      "Choisis une image."
-    );
+    alert("Choisis une image.");
 
     $("#pImage").value="";
 
@@ -986,11 +1158,13 @@ $("#pImage").onchange=async()=>{
     const image=
       await resizeImage(file);
 
+
     editingImage=image;
 
 
     const preview=
       $("#imagePreview");
+
 
     if(preview){
 
@@ -1004,7 +1178,6 @@ $("#pImage").onchange=async()=>{
       "Impossible de charger cette image."
     );
   }
-
 };
 
 
@@ -1059,7 +1232,6 @@ $("#saveProduct").onclick=async()=>{
 
     available:
       $("#pAvailable").value==="true"
-
   };
 
 
@@ -1089,7 +1261,6 @@ $("#saveProduct").onclick=async()=>{
   await loadProducts();
 
   await renderAdmin();
-
 };
 
 
@@ -1105,7 +1276,13 @@ $("#search").oninput=
   render;
 
 
+/* =========================
+   DÉMARRAGE
+========================= */
+
 async function boot(){
+
+  applyTheme();
 
   await refreshUser();
 
@@ -1120,7 +1297,6 @@ async function boot(){
       0
     )
   );
-
 }
 
 
