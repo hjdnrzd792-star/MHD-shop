@@ -1,835 +1,698 @@
 const SUPABASE_URL = "https://oabjxsclanvgmvnezabj.supabase.co";
 const SUPABASE_KEY = "sb_publishable_Wccb86Hdfbxwx1tj0ciPDg_aRv8yqje";
 
-const supabase = window.supabase.createClient(
-  SUPABASE_URL,
-  SUPABASE_KEY
-);
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const WHATSAPP = "221787488199";
 
+let currentUser = null;
 let products = [];
 let cart = JSON.parse(localStorage.getItem("mhd_cart") || "[]");
-let currentUser = null;
-let profile = null;
-let selectedCategory = "Tous";
-let editingProductId = null;
-let currentImage = null;
 
-/* =========================================================
-   UTILITAIRES
-========================================================= */
+// =========================
+// OUTILS
+// =========================
 
-const $ = id => document.getElementById(id);
+const $ = (id) => document.getElementById(id);
 
-function money(value){
+function escapeHTML(value = "") {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function money(value) {
   return Number(value || 0).toLocaleString("fr-FR") + " FCFA";
 }
 
-function saveCart(){
-  localStorage.setItem("mhd_cart", JSON.stringify(cart));
-  updateCartCount();
-}
+// =========================
+// NAVIGATION
+// =========================
 
-function updateCartCount(){
-  const count = cart.reduce((sum,item) => sum + Number(item.qty || 1),0);
-  const el = $("cartCount");
-  if(el) el.textContent = count;
-}
-
-function escapeHTML(value){
-  return String(value ?? "")
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;")
-    .replaceAll("'","&#039;");
-}
-
-function notify(message){
-  const old = document.querySelector(".mhd-toast");
-  if(old) old.remove();
-
-  const toast = document.createElement("div");
-  toast.className = "mhd-toast";
-  toast.textContent = message;
-
-  Object.assign(toast.style,{
-    position:"fixed",
-    top:"90px",
-    left:"50%",
-    transform:"translateX(-50%)",
-    zIndex:"9999",
-    padding:"13px 17px",
-    borderRadius:"16px",
-    background:"rgba(15,20,30,.88)",
-    border:"1px solid rgba(255,255,255,.16)",
-    color:"#fff",
-    backdropFilter:"blur(20px)",
-    WebkitBackdropFilter:"blur(20px)",
-    boxShadow:"0 15px 40px rgba(0,0,0,.35)",
-    fontWeight:"800",
-    fontSize:"13px",
-    maxWidth:"90%",
-    textAlign:"center"
+function goTo(page) {
+  document.querySelectorAll(".page").forEach((p) => {
+    p.classList.remove("active");
   });
 
-  document.body.appendChild(toast);
+  const target = $(page);
 
-  setTimeout(()=>{
-    toast.style.opacity="0";
-    toast.style.transition=".25s";
-    setTimeout(()=>toast.remove(),250);
-  },2200);
-}
+  if (target) {
+    target.classList.add("active");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
-/* =========================================================
-   NAVIGATION — CORRECTION PRINCIPALE
-========================================================= */
-
-function goTo(pageId){
-
-  const pages = document.querySelectorAll(".page");
-
-  pages.forEach(page=>{
-    page.classList.remove("active");
+  document.querySelectorAll("[data-go]").forEach((button) => {
+    button.classList.remove("active");
   });
 
-  const target = document.getElementById(pageId);
+  document
+    .querySelectorAll(`[data-go="${page}"]`)
+    .forEach((button) => button.classList.add("active"));
 
-  if(!target){
-    console.warn("Page introuvable:",pageId);
+  if (page === "panier") renderCart();
+  if (page === "commande") prepareCheckout();
+  if (page === "compte") loadProfile();
+  if (page === "admin") openAdmin();
+}
+
+// =========================
+// CLICS — VERSION IPHONE
+// =========================
+
+document.addEventListener("click", function (event) {
+
+  const element = event.target instanceof Element
+    ? event.target
+    : event.target.parentElement;
+
+  if (!element) return;
+
+  // Navigation
+  const navigation = element.closest("[data-go]");
+
+  if (navigation) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const page = navigation.getAttribute("data-go");
+
+    if (page) {
+      goTo(page);
+    }
+
     return;
   }
 
-  target.classList.add("active");
+  // Ajouter au panier
+  const addButton = element.closest("[data-add]");
 
-  document.querySelectorAll(".liquid-nav button[data-go]")
-    .forEach(button=>{
-      button.classList.toggle(
-        "active",
-        button.dataset.go === pageId
-      );
-    });
+  if (addButton) {
+    event.preventDefault();
+    event.stopPropagation();
 
-  window.scrollTo({
-    top:0,
-    behavior:"smooth"
-  });
+    addToCart(addButton.getAttribute("data-add"));
+    return;
+  }
 
-  if(pageId === "boutique") renderProducts();
-  if(pageId === "panier") renderCart();
-  if(pageId === "compte") renderAccount();
-  if(pageId === "admin") openAdmin();
-  if(pageId === "commande") prepareCheckout();
-}
+  // Supprimer du panier
+  const removeButton = element.closest("[data-remove]");
 
-/* Tous les boutons data-go fonctionnent ici */
-document.addEventListener("click",event=>{
+  if (removeButton) {
+    event.preventDefault();
 
-  const button = event.target.closest("[data-go]");
+    removeFromCart(removeButton.getAttribute("data-remove"));
+    return;
+  }
 
-  if(!button) return;
+  // Quantité +
+  const plusButton = element.closest("[data-plus]");
 
-  event.preventDefault();
+  if (plusButton) {
+    event.preventDefault();
 
-  const page = button.dataset.go;
+    changeQuantity(
+      plusButton.getAttribute("data-plus"),
+      1
+    );
 
-  if(page) goTo(page);
+    return;
+  }
+
+  // Quantité -
+  const minusButton = element.closest("[data-minus]");
+
+  if (minusButton) {
+    event.preventDefault();
+
+    changeQuantity(
+      minusButton.getAttribute("data-minus"),
+      -1
+    );
+
+    return;
+  }
+
+  // MHD IA
+  if (element.closest("#mhdIAButton")) {
+    event.preventDefault();
+    toggleIA();
+    return;
+  }
+
+  // Fermer IA
+  if (element.closest("#closeIA")) {
+    event.preventDefault();
+    closeIA();
+    return;
+  }
+
+  // Déconnexion
+  if (element.closest("#logoutBtn")) {
+    event.preventDefault();
+    logout();
+    return;
+  }
+
+  // Admin quitter
+  if (element.closest("#adminExit")) {
+    event.preventDefault();
+    goTo("accueil");
+    return;
+  }
+
+  // Connexion
+  if (element.closest("#loginBtn")) {
+    event.preventDefault();
+    login();
+    return;
+  }
+
+  // Inscription
+  if (element.closest("#signupBtn")) {
+    event.preventDefault();
+    signup();
+    return;
+  }
+
+  // Google
+  if (element.closest("#googleBtn")) {
+    event.preventDefault();
+    loginGoogle();
+    return;
+  }
+
+  // Apple
+  if (element.closest("#appleBtn")) {
+    event.preventDefault();
+    loginApple();
+    return;
+  }
+
+  // Sauvegarde profil
+  if (element.closest("#saveProfile")) {
+    event.preventDefault();
+    saveProfile();
+    return;
+  }
+
+  // Vérification téléphone
+  if (element.closest("#sendPhoneCode")) {
+    event.preventDefault();
+    sendPhoneCode();
+    return;
+  }
+
+  if (element.closest("#verifyPhoneCode")) {
+    event.preventDefault();
+    verifyPhoneCode();
+    return;
+  }
+
+  // Commander
+  if (element.closest("#siteOrderBtn")) {
+    event.preventDefault();
+    placeOrder("site");
+    return;
+  }
+
+  if (element.closest("#whatsappOrderBtn")) {
+    event.preventDefault();
+    placeOrder("whatsapp");
+    return;
+  }
+
+  // Admin produit
+  if (element.closest("#addProductBtn")) {
+    event.preventDefault();
+    addProduct();
+    return;
+  }
+
+  const deleteProductButton = element.closest("[data-delete-product]");
+
+  if (deleteProductButton) {
+    event.preventDefault();
+
+    deleteProduct(
+      deleteProductButton.getAttribute("data-delete-product")
+    );
+
+    return;
+  }
+
+  const statusButton = element.closest("[data-order-status]");
+
+  if (statusButton) {
+    event.preventDefault();
+
+    updateOrderStatus(
+      statusButton.getAttribute("data-order-status"),
+      statusButton.getAttribute("data-status")
+    );
+
+    return;
+  }
+
 });
 
-/* =========================================================
-   AUTH
-========================================================= */
+// =========================
+// AUTH
+// =========================
 
-async function loadUser(){
+async function login() {
 
-  const {data} = await supabase.auth.getSession();
+  const email = $("loginEmail")?.value.trim();
+  const password = $("loginPassword")?.value;
 
-  currentUser = data.session?.user || null;
-
-  if(currentUser){
-    await loadProfile();
-  }
-
-  renderAccount();
-}
-
-supabase.auth.onAuthStateChange(async(_event,session)=>{
-
-  currentUser = session?.user || null;
-
-  if(currentUser){
-    setTimeout(loadProfile,0);
-  }else{
-    profile = null;
-    renderAccount();
-  }
-});
-
-/* =========================================================
-   PROFIL
-========================================================= */
-
-async function loadProfile(){
-
-  if(!currentUser) return;
-
-  const {data,error} = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id",currentUser.id)
-    .maybeSingle();
-
-  if(error){
-    console.error(error);
+  if (!email || !password) {
+    alert("Entre ton email et ton mot de passe.");
     return;
   }
 
-  profile = data;
-
-  if(profile){
-    if($("orderFirstName")) $("orderFirstName").value = profile.first_name || "";
-    if($("orderLastName")) $("orderLastName").value = profile.last_name || "";
-    if($("orderPhone")) $("orderPhone").value = profile.phone || "";
-  }
-}
-
-async function saveProfile(){
-
-  if(!currentUser){
-    notify("Connecte-toi d'abord.");
-    return;
-  }
-
-  const firstName = $("profileFirstName")?.value.trim() || "";
-  const lastName = $("profileLastName")?.value.trim() || "";
-  const phone = $("profilePhone")?.value.trim() || "";
-
-  const {error} = await supabase
-    .from("profiles")
-    .upsert({
-      id:currentUser.id,
-      first_name:firstName,
-      last_name:lastName,
-      phone:phone
-    });
-
-  if(error){
-    console.error(error);
-    notify("Impossible d'enregistrer le profil.");
-    return;
-  }
-
-  await loadProfile();
-
-  notify("Profil enregistré ✅");
-}
-
-/* =========================================================
-   COMPTE
-========================================================= */
-
-function renderAccount(){
-
-  const panel = $("authPanel");
-
-  if(!panel) return;
-
-  if(!currentUser){
-
-    panel.innerHTML = `
-      <h2>Bienvenue 👋</h2>
-      <p style="color:#9ca8bd">
-        Connecte-toi pour gérer ton profil et tes commandes.
-      </p>
-
-      <label>Email</label>
-      <input id="loginEmail" type="email" placeholder="ton@email.com">
-
-      <label>Mot de passe</label>
-      <input id="loginPassword" type="password" placeholder="Mot de passe">
-
-      <button class="primary full" id="loginButton">
-        🔐 Se connecter
-      </button>
-
-      <button class="secondary full" id="signupButton">
-        ✨ Créer un compte
-      </button>
-
-      <button class="ghost full" id="googleButton">
-        🌐 Continuer avec Google
-      </button>
-
-      <button class="ghost full" id="appleButton">
-         Continuer avec Apple
-      </button>
-    `;
-
-    $("loginButton").onclick = login;
-    $("signupButton").onclick = signup;
-    $("googleButton").onclick = loginGoogle;
-    $("appleButton").onclick = loginApple;
-
-    return;
-  }
-
-  const email = escapeHTML(currentUser.email || "");
-
-  panel.innerHTML = `
-    <div style="margin-bottom:18px">
-      <small style="color:#63baff">COMPTE CONNECTÉ</small>
-      <h2 style="margin:5px 0">${email}</h2>
-    </div>
-
-    <label>Prénom</label>
-    <input
-      id="profileFirstName"
-      value="${escapeHTML(profile?.first_name || "")}"
-      placeholder="Ton prénom"
-    >
-
-    <label>Nom</label>
-    <input
-      id="profileLastName"
-      value="${escapeHTML(profile?.last_name || "")}"
-      placeholder="Ton nom"
-    >
-
-    <label>Téléphone</label>
-    <input
-      id="profilePhone"
-      type="tel"
-      value="${escapeHTML(profile?.phone || "")}"
-      placeholder="+221 77 000 00 00"
-    >
-
-    <div class="status-box">
-      ${profile?.phone_verified
-        ? "✅ Numéro vérifié"
-        : "⚠️ Numéro non vérifié"}
-    </div>
-
-    <button class="primary full" id="saveProfileButton">
-      💾 Enregistrer mon profil
-    </button>
-
-    <button class="secondary full" id="accountVerifyPhone">
-      📲 Vérifier mon numéro
-    </button>
-
-    <button class="ghost full" id="logoutButton">
-      🚪 Se déconnecter
-    </button>
-
-    <div style="
-      margin-top:18px;
-      padding:15px;
-      border-radius:18px;
-      background:rgba(22,140,255,.08);
-      border:1px solid rgba(22,140,255,.15);
-    ">
-      <b>💬 Support vendeur</b>
-      <p style="margin:7px 0;color:#9ca8bd">
-        +221 78 748 81 99
-      </p>
-    </div>
-  `;
-
-  $("saveProfileButton").onclick = saveProfile;
-  $("logoutButton").onclick = logout;
-  $("accountVerifyPhone").onclick = verifyPhoneFromAccount;
-}
-
-/* =========================================================
-   LOGIN
-========================================================= */
-
-async function login(){
-
-  const email = $("loginEmail").value.trim();
-  const password = $("loginPassword").value;
-
-  if(!email || !password){
-    notify("Remplis ton email et ton mot de passe.");
-    return;
-  }
-
-  const {error} = await supabase.auth.signInWithPassword({
+  const { data, error } = await db.auth.signInWithPassword({
     email,
     password
   });
 
-  if(error){
-    notify(error.message);
+  if (error) {
+    alert(error.message);
     return;
   }
 
-  notify("Connexion réussie ✅");
+  currentUser = data.user;
+
+  alert("Connexion réussie !");
+  await loadUser();
+
   goTo("compte");
 }
 
-async function signup(){
+async function signup() {
 
-  const email = $("loginEmail").value.trim();
-  const password = $("loginPassword").value;
+  const email = $("signupEmail")?.value.trim();
+  const password = $("signupPassword")?.value;
 
-  if(!email || !password){
-    notify("Remplis ton email et choisis un mot de passe.");
+  if (!email || !password) {
+    alert("Remplis tous les champs.");
     return;
   }
 
-  if(password.length < 6){
-    notify("Le mot de passe doit avoir au moins 6 caractères.");
+  if (password.length < 6) {
+    alert("Le mot de passe doit avoir au moins 6 caractères.");
     return;
   }
 
-  const {error} = await supabase.auth.signUp({
+  const { data, error } = await db.auth.signUp({
     email,
     password
   });
 
-  if(error){
-    notify(error.message);
+  if (error) {
+    alert(error.message);
     return;
   }
 
-  notify("Compte créé. Vérifie ton email si demandé.");
+  currentUser = data.user;
+
+  if (currentUser) {
+    await db.from("profiles").upsert({
+      id: currentUser.id
+    });
+  }
+
+  alert("Compte créé !");
+  goTo("compte");
 }
 
-async function loginGoogle(){
+async function loginGoogle() {
 
-  const {error} = await supabase.auth.signInWithOAuth({
-    provider:"google",
-    options:{
-      redirectTo:window.location.origin + window.location.pathname
+  const { error } = await db.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: window.location.href
     }
   });
 
-  if(error) notify(error.message);
+  if (error) {
+    alert(error.message);
+  }
 }
 
-async function loginApple(){
+async function loginApple() {
 
-  const {error} = await supabase.auth.signInWithOAuth({
-    provider:"apple",
-    options:{
-      redirectTo:window.location.origin + window.location.pathname
+  const { error } = await db.auth.signInWithOAuth({
+    provider: "apple",
+    options: {
+      redirectTo: window.location.href
     }
   });
 
-  if(error) notify(error.message);
+  if (error) {
+    alert(
+      "Apple Login doit d'abord être configuré dans Supabase."
+    );
+  }
 }
 
-async function logout(){
+async function logout() {
 
-  await supabase.auth.signOut();
+  await db.auth.signOut();
 
   currentUser = null;
-  profile = null;
 
-  notify("Déconnexion effectuée.");
+  alert("Déconnexion réussie.");
+
   goTo("accueil");
 }
 
-/* =========================================================
-   TÉLÉPHONE
-========================================================= */
+// =========================
+// UTILISATEUR
+// =========================
 
-async function sendPhoneOTP(){
+async function loadUser() {
 
-  if(!currentUser){
-    notify("Connecte-toi d'abord.");
-    return;
-  }
+  const { data } = await db.auth.getUser();
 
-  const phone = $("orderPhone")?.value.trim();
+  currentUser = data?.user || null;
 
-  if(!phone){
-    notify("Entre ton numéro de téléphone.");
-    return;
-  }
-
-  const {error} = await supabase.auth.updateUser({
-    phone
-  });
-
-  if(error){
-    console.error(error);
-    notify("Vérification SMS indisponible ou configuration SMS manquante.");
-    return;
-  }
-
-  $("otpArea")?.classList.remove("hidden");
-
-  if($("phoneStatus")){
-    $("phoneStatus").textContent =
-      "📲 Code envoyé. Entre le code reçu par SMS.";
-  }
-
-  notify("Code SMS envoyé.");
-}
-
-async function verifyPhone(){
-
-  if(!currentUser) return;
-
-  const phone = $("orderPhone")?.value.trim();
-  const token = $("otpCode")?.value.trim();
-
-  if(!phone || !token){
-    notify("Entre le code reçu par SMS.");
-    return;
-  }
-
-  const {error} = await supabase.auth.verifyOtp({
-    phone,
-    token,
-    type:"phone_change"
-  });
-
-  if(error){
-    console.error(error);
-    notify("Code incorrect ou expiré.");
-    return;
-  }
-
-  const {error:profileError} = await supabase
-    .from("profiles")
-    .upsert({
-      id:currentUser.id,
-      phone,
-      phone_verified:true
-    });
-
-  if(profileError){
-    console.error(profileError);
-    notify("Numéro vérifié, mais profil non enregistré.");
-    return;
-  }
+  if (!currentUser) return;
 
   await loadProfile();
-
-  if($("phoneStatus")){
-    $("phoneStatus").textContent =
-      "✅ Numéro vérifié avec succès.";
-  }
-
-  notify("Numéro vérifié ✅");
 }
 
-async function verifyPhoneFromAccount(){
+async function loadProfile() {
+
+  if (!currentUser) {
+    const { data } = await db.auth.getUser();
+    currentUser = data?.user || null;
+  }
+
+  if (!currentUser) return;
+
+  const { data, error } = await db
+    .from("profiles")
+    .select("*")
+    .eq("id", currentUser.id)
+    .maybeSingle();
+
+  if (error) {
+    console.error(error);
+    return;
+  }
+
+  if (!data) return;
+
+  if ($("firstName")) $("firstName").value = data.first_name || "";
+  if ($("lastName")) $("lastName").value = data.last_name || "";
+  if ($("profilePhone")) $("profilePhone").value = data.phone || "";
+
+  const verified = $("phoneStatus");
+
+  if (verified) {
+    verified.textContent =
+      data.phone_verified
+        ? "✓ Numéro vérifié"
+        : "⚠ Numéro non vérifié";
+  }
+
+  if ($("profileEmail")) {
+    $("profileEmail").value = currentUser.email || "";
+  }
+}
+
+async function saveProfile() {
+
+  if (!currentUser) {
+    alert("Connecte-toi d'abord.");
+    goTo("compte");
+    return;
+  }
+
+  const firstName = $("firstName")?.value.trim() || "";
+  const lastName = $("lastName")?.value.trim() || "";
+  const phone = $("profilePhone")?.value.trim() || "";
+
+  const { error } = await db
+    .from("profiles")
+    .upsert({
+      id: currentUser.id,
+      first_name: firstName,
+      last_name: lastName,
+      phone
+    });
+
+  if (error) {
+    alert(error.message);
+    return;
+  }
+
+  alert("Profil enregistré !");
+}
+
+// =========================
+// TÉLÉPHONE OTP
+// =========================
+
+async function sendPhoneCode() {
+
+  if (!currentUser) {
+    alert("Connecte-toi d'abord.");
+    return;
+  }
 
   const phone = $("profilePhone")?.value.trim();
 
-  if(!phone){
-    notify("Entre d'abord ton numéro.");
+  if (!phone) {
+    alert("Entre ton numéro de téléphone.");
     return;
   }
 
-  if(!currentUser){
-    notify("Connecte-toi d'abord.");
-    return;
-  }
-
-  const {error} = await supabase.auth.updateUser({phone});
-
-  if(error){
-    console.error(error);
-    notify("La vérification SMS doit être configurée dans Supabase.");
-    return;
-  }
-
-  const code = prompt("Entre le code reçu par SMS :");
-
-  if(!code) return;
-
-  const {error:verifyError} = await supabase.auth.verifyOtp({
-    phone,
-    token:code,
-    type:"phone_change"
+  const { error } = await db.auth.updateUser({
+    phone
   });
 
-  if(verifyError){
-    notify("Code incorrect ou expiré.");
+  if (error) {
+    alert(error.message);
     return;
   }
 
-  await supabase
+  alert("Code envoyé par SMS.");
+}
+
+async function verifyPhoneCode() {
+
+  if (!currentUser) return;
+
+  const phone = $("profilePhone")?.value.trim();
+  const token = $("phoneCode")?.value.trim();
+
+  if (!phone || !token) {
+    alert("Entre le code reçu par SMS.");
+    return;
+  }
+
+  const { error } = await db.auth.verifyOtp({
+    phone,
+    token,
+    type: "phone_change"
+  });
+
+  if (error) {
+    alert(error.message);
+    return;
+  }
+
+  await db
     .from("profiles")
-    .upsert({
-      id:currentUser.id,
+    .update({
       phone,
-      phone_verified:true
-    });
+      phone_verified: true
+    })
+    .eq("id", currentUser.id);
+
+  alert("Numéro vérifié !");
 
   await loadProfile();
-  renderAccount();
-
-  notify("Numéro vérifié ✅");
 }
 
-/* =========================================================
-   PRODUITS
-========================================================= */
+// =========================
+// PRODUITS
+// =========================
 
-const demoProducts = [
-  {
-    id:"demo1",
-    name:"Gaming Premium",
-    category:"Gaming",
-    price:5000,
-    image:"",
-    available:true
-  },
-  {
-    id:"demo2",
-    name:"Service Digital",
-    category:"Digital",
-    price:3000,
-    image:"",
-    available:true
-  }
-];
+async function loadProducts() {
 
-async function loadProducts(){
-
-  const {data,error} = await supabase
+  const { data, error } = await db
     .from("products")
     .select("*")
-    .order("created_at",{ascending:false});
+    .order("created_at", { ascending: false });
 
-  if(error){
+  if (error) {
     console.error(error);
-    products = demoProducts;
-  }else{
-    products = data || [];
-  }
-
-  renderProducts();
-  renderHomeProducts();
-  renderCategories();
-}
-
-/* =========================================================
-   CATÉGORIES
-========================================================= */
-
-function renderCategories(){
-
-  const box = $("categories");
-
-  if(!box) return;
-
-  const cats = [
-    "Tous",
-    ...new Set(
-      products
-        .map(p=>p.category)
-        .filter(Boolean)
-    )
-  ];
-
-  box.innerHTML = cats.map(cat=>`
-    <button
-      class="${selectedCategory === cat ? "active":""}"
-      data-category="${escapeHTML(cat)}"
-    >
-      ${escapeHTML(cat)}
-    </button>
-  `).join("");
-
-  box.querySelectorAll("[data-category]").forEach(button=>{
-    button.onclick = ()=>{
-      selectedCategory = button.dataset.category;
-      renderCategories();
-      renderProducts();
-    };
-  });
-}
-
-/* =========================================================
-   CARTES PRODUITS
-========================================================= */
-
-function productHTML(product){
-
-  const image = product.image
-    ? `<img class="product-image" src="${product.image}" alt="${escapeHTML(product.name)}">`
-    : `
-      <div class="product-image"
-        style="
-          display:flex;
-          align-items:center;
-          justify-content:center;
-          font-size:42px;
-          background:linear-gradient(135deg,#0b1628,#111827);
-        ">
-        🎮
-      </div>
-    `;
-
-  return `
-    <article class="product-card">
-
-      ${image}
-
-      <h3>${escapeHTML(product.name)}</h3>
-
-      <p>
-        ${escapeHTML(product.category || "Digital")}
-      </p>
-
-      <div class="price">
-        ${money(product.price)}
-      </div>
-
-      <div class="product-actions">
-
-        <button
-          data-add="${escapeHTML(product.id)}"
-          ${product.available === false ? "disabled":""}
-        >
-          ${product.available === false
-            ? "Indisponible"
-            : "Ajouter 🛒"}
-        </button>
-
-      </div>
-
-    </article>
-  `;
-}
-
-function renderProducts(){
-
-  const box = $("products");
-
-  if(!box) return;
-
-  const search =
-    ($("search")?.value || "")
-      .trim()
-      .toLowerCase();
-
-  let list = products.filter(product=>{
-
-    const matchesCategory =
-      selectedCategory === "Tous" ||
-      product.category === selectedCategory;
-
-    const matchesSearch =
-      !search ||
-      product.name.toLowerCase().includes(search) ||
-      String(product.category || "")
-        .toLowerCase()
-        .includes(search);
-
-    return matchesCategory && matchesSearch;
-  });
-
-  if(!list.length){
-    box.innerHTML = `
-      <div class="panel glass">
-        <h3>Aucun produit trouvé 🔎</h3>
-        <p style="color:#9ca8bd">
-          Essaie une autre recherche.
-        </p>
-      </div>
-    `;
     return;
   }
 
-  box.innerHTML = list.map(productHTML).join("");
+  products = data || [];
 
-  box.querySelectorAll("[data-add]").forEach(button=>{
-    button.onclick = ()=>{
-      addToCart(button.dataset.add);
-    };
-  });
+  renderProducts();
 }
 
-function renderHomeProducts(){
+function renderProducts() {
 
-  const box = $("homeProducts");
+  const container = $("productGrid");
 
-  if(!box) return;
+  if (!container) return;
 
-  box.innerHTML =
-    products
-      .filter(p=>p.available !== false)
-      .slice(0,4)
-      .map(productHTML)
-      .join("");
+  const search = $("search")?.value.toLowerCase().trim() || "";
 
-  box.querySelectorAll("[data-add]").forEach(button=>{
-    button.onclick = ()=>{
-      addToCart(button.dataset.add);
-    };
+  const filtered = products.filter((product) => {
+
+    return (
+      product.name.toLowerCase().includes(search) ||
+      product.category.toLowerCase().includes(search)
+    );
+
   });
+
+  if (!filtered.length) {
+
+    container.innerHTML = `
+      <div class="empty-state">
+        <h3>Aucun produit</h3>
+        <p>Essaie une autre recherche.</p>
+      </div>
+    `;
+
+    return;
+  }
+
+  container.innerHTML = filtered.map((product) => {
+
+    return `
+      <article class="product-card">
+
+        <div class="product-image">
+
+          ${
+            product.image
+              ? `<img src="${product.image}" alt="${escapeHTML(product.name)}">`
+              : `<div class="no-image">🎮</div>`
+          }
+
+        </div>
+
+        <div class="product-info">
+
+          <div class="product-category">
+            ${escapeHTML(product.category)}
+          </div>
+
+          <h3>
+            ${escapeHTML(product.name)}
+          </h3>
+
+          <strong>
+            ${money(product.price)}
+          </strong>
+
+          <button
+            class="primary-button"
+            data-add="${product.id}">
+            Ajouter au panier
+          </button>
+
+        </div>
+
+      </article>
+    `;
+
+  }).join("");
 }
 
-$("search")?.addEventListener("input",renderProducts);
+// =========================
+// PANIER
+// =========================
 
-/* =========================================================
-   PANIER
-========================================================= */
+function saveCart() {
 
-function addToCart(id){
-
-  const product = products.find(
-    p=>String(p.id) === String(id)
+  localStorage.setItem(
+    "mhd_cart",
+    JSON.stringify(cart)
   );
 
-  if(!product){
-    notify("Produit introuvable.");
+  updateCartCount();
+}
+
+function updateCartCount() {
+
+  const count = cart.reduce(
+    (total, item) => total + item.quantity,
+    0
+  );
+
+  if ($("cartCount")) {
+    $("cartCount").textContent = count;
+  }
+}
+
+function addToCart(productId) {
+
+  const product = products.find(
+    (p) => String(p.id) === String(productId)
+  );
+
+  if (!product) {
+    alert("Produit introuvable.");
     return;
   }
 
   const existing = cart.find(
-    item=>String(item.id) === String(id)
+    (item) => String(item.id) === String(product.id)
   );
 
-  if(existing){
-    existing.qty = Number(existing.qty || 1) + 1;
-  }else{
+  if (existing) {
+    existing.quantity++;
+  } else {
+
     cart.push({
-      id:product.id,
-      name:product.name,
-      price:Number(product.price),
-      image:product.image || "",
-      qty:1
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      image: product.image,
+      quantity: 1
     });
+
   }
 
   saveCart();
 
-  notify("Produit ajouté au panier 🛒");
+  alert("Produit ajouté au panier 🛒");
 }
 
-function removeFromCart(id){
+function removeFromCart(productId) {
 
   cart = cart.filter(
-    item=>String(item.id) !== String(id)
+    (item) => String(item.id) !== String(productId)
   );
 
   saveCart();
   renderCart();
 }
 
-function changeQty(id,delta){
+function changeQuantity(productId, amount) {
 
   const item = cart.find(
-    x=>String(x.id) === String(id)
+    (item) => String(item.id) === String(productId)
   );
 
-  if(!item) return;
+  if (!item) return;
 
-  item.qty = Number(item.qty || 1) + delta;
+  item.quantity += amount;
 
-  if(item.qty <= 0){
-    removeFromCart(id);
+  if (item.quantity <= 0) {
+    removeFromCart(productId);
     return;
   }
 
@@ -837,967 +700,520 @@ function changeQty(id,delta){
   renderCart();
 }
 
-function cartTotal(){
+function renderCart() {
 
-  return cart.reduce(
-    (sum,item)=>
-      sum + Number(item.price) * Number(item.qty || 1),
-    0
-  );
-}
+  const container = $("cartItems");
 
-function renderCart(){
+  if (!container) return;
 
-  const box = $("cart");
+  if (!cart.length) {
 
-  if(!box) return;
-
-  if(!cart.length){
-
-    box.innerHTML = `
-      <div class="panel glass" style="text-align:center;padding:35px 20px">
-        <div style="font-size:48px">🛒</div>
-        <h2>Ton panier est vide</h2>
-        <p style="color:#9ca8bd">
-          Ajoute des produits pour commencer.
-        </p>
-        <button class="primary" data-go="boutique">
-          🛍️ Voir la boutique
+    container.innerHTML = `
+      <div class="empty-state">
+        <h3>Ton panier est vide 🛒</h3>
+        <button
+          class="primary-button"
+          data-go="boutique">
+          Voir la boutique
         </button>
       </div>
     `;
 
+    if ($("cartTotal")) {
+      $("cartTotal").textContent = "0 FCFA";
+    }
+
     return;
   }
 
-  box.innerHTML = `
+  let total = 0;
 
-    ${cart.map(item=>`
+  container.innerHTML = cart.map((item) => {
 
+    const subtotal =
+      Number(item.price) * Number(item.quantity);
+
+    total += subtotal;
+
+    return `
       <div class="cart-item">
 
         ${
           item.image
             ? `<img src="${item.image}" alt="">`
-            : `<div style="
-                width:70px;
-                height:70px;
-                display:grid;
-                place-items:center;
-                border-radius:15px;
-                background:#101827;
-                font-size:28px
-              ">🎮</div>`
+            : ""
         }
 
         <div class="cart-item-info">
 
-          <b>${escapeHTML(item.name)}</b>
+          <strong>${escapeHTML(item.name)}</strong>
 
-          <small>${money(item.price)}</small>
+          <span>${money(item.price)}</span>
 
-          <div style="
-            display:flex;
-            align-items:center;
-            gap:7px;
-            margin-top:8px;
-          ">
+          <div class="quantity-controls">
 
-            <button
-              class="ghost"
-              style="min-height:32px;padding:0 11px"
-              data-minus="${item.id}"
-            >−</button>
+            <button data-minus="${item.id}">
+              −
+            </button>
 
-            <b>${item.qty}</b>
+            <span>${item.quantity}</span>
 
-            <button
-              class="ghost"
-              style="min-height:32px;padding:0 11px"
-              data-plus="${item.id}"
-            >+</button>
+            <button data-plus="${item.id}">
+              +
+            </button>
 
           </div>
 
         </div>
 
         <button
-          class="ghost"
-          data-remove="${item.id}"
-          style="min-height:40px;padding:0 10px"
-        >
+          class="delete-button"
+          data-remove="${item.id}">
           🗑️
         </button>
 
       </div>
+    `;
 
-    `).join("")}
+  }).join("");
 
-    <div class="cart-total glass">
-
-      <div style="
-        display:flex;
-        justify-content:space-between;
-        align-items:center;
-      ">
-        <span>Total</span>
-        <strong>${money(cartTotal())}</strong>
-      </div>
-
-      <button
-        class="primary full"
-        id="checkoutButton"
-      >
-        🚀 Passer commande
-      </button>
-
-    </div>
-  `;
-
-  box.querySelectorAll("[data-minus]").forEach(btn=>{
-    btn.onclick=()=>{
-      changeQty(btn.dataset.minus,-1);
-    };
-  });
-
-  box.querySelectorAll("[data-plus]").forEach(btn=>{
-    btn.onclick=()=>{
-      changeQty(btn.dataset.plus,1);
-    };
-  });
-
-  box.querySelectorAll("[data-remove]").forEach(btn=>{
-    btn.onclick=()=>{
-      removeFromCart(btn.dataset.remove);
-    };
-  });
-
-  $("checkoutButton").onclick=()=>{
-    goTo("commande");
-  };
+  if ($("cartTotal")) {
+    $("cartTotal").textContent = money(total);
+  }
 }
 
-/* =========================================================
-   COMMANDE
-========================================================= */
+// =========================
+// COMMANDE
+// =========================
 
-function prepareCheckout(){
+function prepareCheckout() {
 
-  if(!cart.length){
-    notify("Ton panier est vide.");
+  if (!currentUser) {
+    alert("Connecte-toi avant de commander.");
+    goTo("compte");
+    return;
+  }
+
+  if (!cart.length) {
+    alert("Ton panier est vide.");
     goTo("boutique");
     return;
   }
 
-  if(profile){
-
-    if($("orderFirstName"))
-      $("orderFirstName").value =
-        profile.first_name || "";
-
-    if($("orderLastName"))
-      $("orderLastName").value =
-        profile.last_name || "";
-
-    if($("orderPhone"))
-      $("orderPhone").value =
-        profile.phone || "";
-  }
+  loadProfile();
 }
 
-function getOrderData(){
+async function placeOrder(method) {
 
-  return {
-    first_name:$("orderFirstName")?.value.trim() || "",
-    last_name:$("orderLastName")?.value.trim() || "",
-    phone:$("orderPhone")?.value.trim() || ""
-  };
-}
-
-function validateOrder(){
-
-  if(!currentUser){
-    notify("Connecte-toi avant de commander.");
+  if (!currentUser) {
+    alert("Connecte-toi avant de commander.");
     goTo("compte");
-    return false;
+    return;
   }
 
-  if(!cart.length){
-    notify("Ton panier est vide.");
-    goTo("boutique");
-    return false;
+  if (!cart.length) {
+    alert("Ton panier est vide.");
+    return;
   }
 
-  const data = getOrderData();
+  const firstName = $("orderFirstName")?.value.trim() || "";
+  const lastName = $("orderLastName")?.value.trim() || "";
+  const phone = $("orderPhone")?.value.trim() || "";
 
-  if(!data.first_name || !data.last_name || !data.phone){
-    notify("Prénom, nom et téléphone sont obligatoires.");
-    return false;
+  if (!firstName || !lastName || !phone) {
+    alert("Remplis ton prénom, ton nom et ton numéro.");
+    return;
   }
 
-  if(!profile?.phone_verified){
-    notify("Ton numéro doit être vérifié.");
-    return false;
+  const { data: profile } = await db
+    .from("profiles")
+    .select("phone_verified")
+    .eq("id", currentUser.id)
+    .maybeSingle();
+
+  if (!profile?.phone_verified) {
+    alert("Ton numéro doit être vérifié avant de commander.");
+    goTo("compte");
+    return;
   }
 
-  return true;
-}
+  const total = cart.reduce(
+    (sum, item) =>
+      sum + Number(item.price) * Number(item.quantity),
+    0
+  );
 
-async function createOrder(method){
-
-  if(!validateOrder()) return;
-
-  const data = getOrderData();
-
-  const items = cart.map(item=>({
-    id:item.id,
-    name:item.name,
-    price:item.price,
-    quantity:item.qty,
-    image:item.image || ""
-  }));
-
-  const total = cartTotal();
-
-  const {error} = await supabase
+  const { error } = await db
     .from("orders")
     .insert({
-      user_id:currentUser.id,
-      first_name:data.first_name,
-      last_name:data.last_name,
-      phone:data.phone,
-      phone_verified:true,
-      items,
+      user_id: currentUser.id,
+      first_name: firstName,
+      last_name: lastName,
+      phone,
+      phone_verified: true,
+      items: cart,
       total,
       method,
-      status:"new"
+      status: "new"
     });
 
-  if(error){
-    console.error(error);
-    notify("Impossible d'enregistrer la commande.");
+  if (error) {
+    alert(error.message);
     return;
   }
 
-  await supabase
-    .from("profiles")
-    .upsert({
-      id:currentUser.id,
-      first_name:data.first_name,
-      last_name:data.last_name,
-      phone:data.phone,
-      phone_verified:true
-    });
-
-  await loadProfile();
-
-  if(method === "whatsapp"){
-
-    const text =
-      `🛍️ MHD SHOP — Nouvelle commande%0A%0A` +
-      `👤 ${encodeURIComponent(data.first_name)} ${encodeURIComponent(data.last_name)}%0A` +
-      `📱 ${encodeURIComponent(data.phone)}%0A%0A` +
-      `📦 Produits :%0A` +
-      items.map(item=>
-        `• ${encodeURIComponent(item.name)} x${item.quantity} — ${encodeURIComponent(money(item.price * item.quantity))}`
-      ).join("%0A") +
-      `%0A%0A💰 Total : ${encodeURIComponent(money(total))}`;
-
-    window.open(
-      `https://wa.me/${WHATSAPP}?text=${text}`,
-      "_blank"
-    );
-  }
+  const message =
+    `🛍️ Nouvelle commande MHD SHOP%0A%0A` +
+    `Client : ${firstName} ${lastName}%0A` +
+    `Téléphone : ${phone}%0A%0A` +
+    cart.map(
+      item =>
+        `• ${item.name} x${item.quantity} — ${money(
+          item.price * item.quantity
+        )}`
+    ).join("%0A") +
+    `%0A%0ATotal : ${money(total)}`;
 
   cart = [];
   saveCart();
 
-  notify("Commande envoyée ✅");
+  if (method === "whatsapp") {
 
-  setTimeout(()=>{
-    goTo("accueil");
-  },600);
+    window.location.href =
+      `https://wa.me/${WHATSAPP}?text=${message}`;
+
+    return;
+  }
+
+  alert(
+    "Commande envoyée ! MHD SHOP a bien reçu ta commande."
+  );
+
+  goTo("accueil");
 }
 
-$("sendOtp")?.addEventListener("click",sendPhoneOTP);
-$("verifyOtp")?.addEventListener("click",verifyPhone);
+// =========================
+// ADMIN
+// =========================
 
-$("orderOnSite")?.addEventListener("click",()=>{
-  createOrder("site");
-});
+async function isAdmin() {
 
-$("orderOnWhatsApp")?.addEventListener("click",()=>{
-  createOrder("whatsapp");
-});
+  if (!currentUser) return false;
 
-/* =========================================================
-   ADMIN
-========================================================= */
-
-async function isAdmin(){
-
-  if(!currentUser) return false;
-
-  const {data,error} = await supabase
+  const { data, error } = await db
     .from("profiles")
     .select("role")
-    .eq("id",currentUser.id)
+    .eq("id", currentUser.id)
     .maybeSingle();
 
-  if(error){
-    console.error(error);
-    return false;
-  }
+  if (error) return false;
 
   return data?.role === "admin";
 }
 
-async function openAdmin(){
+async function openAdmin() {
 
-  if(!currentUser){
-    notify("Connecte-toi avec le compte administrateur.");
+  if (!currentUser) {
+    alert("Connecte-toi.");
     goTo("compte");
     return;
   }
 
   const admin = await isAdmin();
 
-  if(!admin){
-    notify("Accès administrateur refusé.");
+  if (!admin) {
+    alert("Accès administrateur refusé.");
     goTo("accueil");
     return;
   }
 
-  loadAdminProducts();
-  loadAdminOrders();
+  await loadAdminProducts();
+  await loadAdminOrders();
 }
 
-/* Navigation admin */
+async function addProduct() {
 
-document.querySelectorAll("[data-admin-tab]").forEach(tab=>{
+  if (!(await isAdmin())) {
+    alert("Accès refusé.");
+    return;
+  }
 
-  tab.addEventListener("click",()=>{
+  const name = $("productName")?.value.trim();
+  const category = $("productCategory")?.value.trim();
+  const price = Number($("productPrice")?.value);
+  const image = $("productImage")?.value.trim() || "";
 
-    document.querySelectorAll("[data-admin-tab]")
-      .forEach(x=>x.classList.remove("active"));
+  if (!name || !category || !price) {
+    alert("Remplis tous les champs du produit.");
+    return;
+  }
 
-    tab.classList.add("active");
-
-    const productsTab = $("adminProductsTab");
-    const ordersTab = $("adminOrdersTab");
-
-    if(tab.dataset.adminTab === "products"){
-      productsTab?.classList.remove("hidden");
-      ordersTab?.classList.add("hidden");
-    }else{
-      productsTab?.classList.add("hidden");
-      ordersTab?.classList.remove("hidden");
-      loadAdminOrders();
-    }
-
-  });
-
-});
-
-$("adminExit")?.addEventListener("click",()=>{
-  goTo("accueil");
-});
-
-/* =========================================================
-   ADMIN PRODUITS
-========================================================= */
-
-async function loadAdminProducts(){
-
-  const box = $("adminProducts");
-
-  if(!box) return;
-
-  const {data,error} = await supabase
+  const { error } = await db
     .from("products")
-    .select("*")
-    .order("created_at",{ascending:false});
+    .insert({
+      name,
+      category,
+      price,
+      image,
+      available: true
+    });
 
-  if(error){
-    console.error(error);
-    box.innerHTML = `
-      <div class="panel">
-        Impossible de charger les produits.
-      </div>
-    `;
+  if (error) {
+    alert(error.message);
     return;
   }
 
-  const list = data || [];
+  alert("Produit ajouté !");
 
-  if(!list.length){
-    box.innerHTML = `
-      <div class="panel">
-        Aucun produit pour le moment.
-      </div>
-    `;
-    return;
-  }
+  if ($("productName")) $("productName").value = "";
+  if ($("productCategory")) $("productCategory").value = "";
+  if ($("productPrice")) $("productPrice").value = "";
+  if ($("productImage")) $("productImage").value = "";
 
-  box.innerHTML = list.map(product=>`
-
-    <div class="admin-product">
-
-      ${
-        product.image
-          ? `<img src="${product.image}" alt="">`
-          : `<div style="
-              width:65px;
-              height:65px;
-              border-radius:14px;
-              display:grid;
-              place-items:center;
-              background:#101827;
-              font-size:25px
-            ">🎮</div>`
-      }
-
-      <div class="admin-product-info">
-
-        <b>${escapeHTML(product.name)}</b>
-
-        <small>
-          ${escapeHTML(product.category)}
-          · ${money(product.price)}
-        </small>
-
-        <small>
-          ${product.available ? "🟢 Disponible" : "🔴 Indisponible"}
-        </small>
-
-      </div>
-
-      <div style="display:flex;flex-direction:column;gap:6px">
-
-        <button
-          class="ghost"
-          data-edit-product="${product.id}"
-          style="min-height:36px;padding:0 9px"
-        >
-          ✏️
-        </button>
-
-        <button
-          class="ghost"
-          data-delete-product="${product.id}"
-          style="min-height:36px;padding:0 9px"
-        >
-          🗑️
-        </button>
-
-      </div>
-
-    </div>
-
-  `).join("");
-
-  box.querySelectorAll("[data-edit-product]").forEach(btn=>{
-    btn.onclick=()=>{
-      editProduct(btn.dataset.editProduct);
-    };
-  });
-
-  box.querySelectorAll("[data-delete-product]").forEach(btn=>{
-    btn.onclick=()=>{
-      deleteProduct(btn.dataset.deleteProduct);
-    };
-  });
-}
-
-/* Image */
-
-$("pImage")?.addEventListener("change",event=>{
-
-  const file = event.target.files?.[0];
-
-  if(!file) return;
-
-  const reader = new FileReader();
-
-  reader.onload = ()=>{
-    currentImage = reader.result;
-
-    const preview = $("imagePreview");
-
-    if(preview){
-      preview.innerHTML =
-        `<img src="${currentImage}" alt="Prévisualisation">`;
-    }
-  };
-
-  reader.readAsDataURL(file);
-});
-
-/* Save product */
-
-$("saveProduct")?.addEventListener("click",saveProduct);
-
-async function saveProduct(){
-
-  const name = $("pName")?.value.trim();
-  const category = $("pCategory")?.value.trim();
-  const price = Number($("pPrice")?.value);
-  const available = $("pAvailable")?.value === "true";
-
-  if(!name || !category || !price){
-    notify("Remplis tous les champs obligatoires.");
-    return;
-  }
-
-  const payload = {
-    name,
-    category,
-    price,
-    available
-  };
-
-  if(currentImage){
-    payload.image = currentImage;
-  }
-
-  let result;
-
-  if(editingProductId){
-
-    result = await supabase
-      .from("products")
-      .update(payload)
-      .eq("id",editingProductId);
-
-  }else{
-
-    result = await supabase
-      .from("products")
-      .insert(payload);
-  }
-
-  if(result.error){
-    console.error(result.error);
-    notify("Impossible d'enregistrer le produit.");
-    return;
-  }
-
-  notify(
-    editingProductId
-      ? "Produit modifié ✅"
-      : "Produit ajouté ✅"
-  );
-
-  resetProductForm();
   await loadProducts();
   await loadAdminProducts();
 }
 
-async function editProduct(id){
+async function loadAdminProducts() {
 
-  const {data,error} = await supabase
+  const container = $("adminProducts");
+
+  if (!container) return;
+
+  const { data, error } = await db
     .from("products")
     .select("*")
-    .eq("id",id)
-    .single();
+    .order("created_at", { ascending: false });
 
-  if(error || !data){
-    notify("Produit introuvable.");
-    return;
-  }
-
-  editingProductId = id;
-
-  $("formTitle").textContent = "Modifier le produit";
-  $("pName").value = data.name || "";
-  $("pCategory").value = data.category || "";
-  $("pPrice").value = data.price || "";
-  $("pAvailable").value =
-    data.available ? "true" : "false";
-
-  currentImage = data.image || null;
-
-  $("imagePreview").innerHTML =
-    data.image
-      ? `<img src="${data.image}" alt="">`
-      : "Aucune photo";
-
-  window.scrollTo({top:0,behavior:"smooth"});
-}
-
-async function deleteProduct(id){
-
-  if(!confirm("Supprimer ce produit ?")) return;
-
-  const {error} = await supabase
-    .from("products")
-    .delete()
-    .eq("id",id);
-
-  if(error){
+  if (error) {
     console.error(error);
-    notify("Impossible de supprimer.");
     return;
   }
 
-  notify("Produit supprimé.");
-  await loadProducts();
-  await loadAdminProducts();
-}
+  container.innerHTML = (data || []).map((product) => {
 
-$("cancelEdit")?.addEventListener("click",resetProductForm);
-
-function resetProductForm(){
-
-  editingProductId = null;
-  currentImage = null;
-
-  if($("formTitle"))
-    $("formTitle").textContent = "Ajouter un produit";
-
-  if($("pName")) $("pName").value="";
-  if($("pCategory")) $("pCategory").value="";
-  if($("pPrice")) $("pPrice").value="";
-  if($("pImage")) $("pImage").value="";
-  if($("pAvailable")) $("pAvailable").value="true";
-
-  if($("imagePreview"))
-    $("imagePreview").textContent =
-      "Aucune photo sélectionnée";
-}
-
-/* =========================================================
-   ADMIN COMMANDES
-========================================================= */
-
-async function loadAdminOrders(){
-
-  const box = $("adminOrders");
-
-  if(!box) return;
-
-  const admin = await isAdmin();
-
-  if(!admin) return;
-
-  const {data,error} = await supabase
-    .from("orders")
-    .select("*")
-    .order("created_at",{ascending:false});
-
-  if(error){
-    console.error(error);
-    box.innerHTML = `
-      <div class="panel">
-        Impossible de charger les commandes.
-      </div>
-    `;
-    return;
-  }
-
-  const orders = data || [];
-
-  updateOrderBadge(orders);
-
-  if(!orders.length){
-    box.innerHTML = `
-      <div class="panel">
-        <h3>Aucune commande 📦</h3>
-        <p style="color:#9ca8bd">
-          Les nouvelles commandes apparaîtront ici.
-        </p>
-      </div>
-    `;
-    return;
-  }
-
-  box.innerHTML = orders.map(order=>`
-
-    <div class="panel glass">
-
-      <div style="
-        display:flex;
-        justify-content:space-between;
-        gap:10px;
-      ">
+    return `
+      <div class="admin-product">
 
         <div>
-          <small style="color:#63baff">
-            COMMANDE #${order.id}
-          </small>
-
-          <h3 style="margin:5px 0">
-            ${escapeHTML(order.first_name)}
-            ${escapeHTML(order.last_name)}
-          </h3>
+          <strong>${escapeHTML(product.name)}</strong>
+          <small>${money(product.price)}</small>
         </div>
 
-        <b style="color:#62b8ff">
-          ${money(order.total)}
-        </b>
+        <button
+          class="delete-button"
+          data-delete-product="${product.id}">
+          Supprimer
+        </button>
 
       </div>
+    `;
 
-      <p style="color:#9ca8bd;font-size:12px">
-        📱 ${escapeHTML(order.phone)}
-      </p>
-
-      <p style="color:#9ca8bd;font-size:12px">
-        🛍️ ${escapeHTML(order.method)}
-      </p>
-
-      <div style="
-        margin:12px 0;
-        padding:12px;
-        border-radius:15px;
-        background:rgba(255,255,255,.045);
-      ">
-        ${(order.items || []).map(item=>`
-          <div style="
-            display:flex;
-            justify-content:space-between;
-            margin:5px 0;
-            font-size:12px;
-          ">
-            <span>
-              ${escapeHTML(item.name)} ×${item.quantity}
-            </span>
-            <b>
-              ${money(Number(item.price)*Number(item.quantity))}
-            </b>
-          </div>
-        `).join("")}
-      </div>
-
-      <select
-        data-order-status="${order.id}"
-      >
-        <option value="new" ${order.status==="new"?"selected":""}>
-          🆕 Nouvelle
-        </option>
-        <option value="processing" ${order.status==="processing"?"selected":""}>
-          🔄 En traitement
-        </option>
-        <option value="completed" ${order.status==="completed"?"selected":""}>
-          ✅ Terminée
-        </option>
-      </select>
-
-    </div>
-
-  `).join("");
-
-  box.querySelectorAll("[data-order-status]")
-    .forEach(select=>{
-      select.onchange=()=>{
-        updateOrderStatus(
-          select.dataset.orderStatus,
-          select.value
-        );
-      };
-    });
+  }).join("");
 }
 
-function updateOrderBadge(orders){
+async function deleteProduct(id) {
 
-  const badge = $("orderBadge");
-
-  if(!badge) return;
-
-  const count = orders.filter(
-    order=>order.status === "new"
-  ).length;
-
-  badge.textContent = count;
-
-  const alert = $("adminOrderAlert");
-
-  if(alert){
-
-    if(count > 0){
-
-      alert.classList.remove("hidden");
-
-      alert.textContent =
-        `🔔 ${count} nouvelle${count>1?"s":""} commande${count>1?"s":""} !`;
-
-    }else{
-
-      alert.classList.add("hidden");
-
-    }
-  }
-}
-
-async function updateOrderStatus(id,status){
-
-  const {error} = await supabase
-    .from("orders")
-    .update({status})
-    .eq("id",id);
-
-  if(error){
-    console.error(error);
-    notify("Impossible de modifier la commande.");
+  if (!(await isAdmin())) {
+    alert("Accès refusé.");
     return;
   }
 
-  notify("Commande mise à jour ✅");
-  loadAdminOrders();
+  if (!confirm("Supprimer ce produit ?")) return;
+
+  const { error } = await db
+    .from("products")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    alert(error.message);
+    return;
+  }
+
+  await loadProducts();
+  await loadAdminProducts();
+
+  alert("Produit supprimé.");
 }
 
-/* =========================================================
-   REALTIME COMMANDES
-========================================================= */
+async function loadAdminOrders() {
 
-supabase
-  .channel("mhd-orders-live")
-  .on(
-    "postgres_changes",
-    {
-      event:"*",
-      schema:"public",
-      table:"orders"
-    },
-    ()=>{
-      loadAdminOrders();
-    }
-  )
-  .subscribe();
+  if (!(await isAdmin())) return;
 
-/* =========================================================
-   MHD IA
-========================================================= */
+  const container = $("adminOrders");
 
-function aiReply(text){
+  if (!container) return;
 
-  const q = text.toLowerCase();
+  const { data, error } = await db
+    .from("orders")
+    .select("*")
+    .order("created_at", { ascending: false });
 
-  if(
-    q.includes("produit") ||
-    q.includes("boutique")
-  ){
-    return "🛍️ Tu peux voir tous les produits dans la Boutique.";
+  if (error) {
+    console.error(error);
+    return;
   }
 
-  if(
-    q.includes("commande") ||
-    q.includes("acheter")
-  ){
-    return "📦 Ajoute un produit au panier puis appuie sur « Passer commande ».";
+  if (!data?.length) {
+
+    container.innerHTML = `
+      <div class="empty-state">
+        <h3>Aucune commande</h3>
+        <p>Les nouvelles commandes apparaîtront ici.</p>
+      </div>
+    `;
+
+    return;
   }
 
-  if(
-    q.includes("whatsapp") ||
-    q.includes("vendeur") ||
-    q.includes("support")
-  ){
-    return "💬 Le support vendeur est disponible au +221 78 748 81 99.";
-  }
+  container.innerHTML = data.map((order) => {
 
-  if(
-    q.includes("prix") ||
-    q.includes("fcfa")
-  ){
-    return "💰 Les prix sont affichés directement sur chaque produit.";
-  }
+    return `
+      <div class="admin-order">
 
-  return "🤖 Je peux t'aider avec les produits, les commandes, le panier ou le support.";
+        <div>
+          <strong>
+            ${escapeHTML(order.first_name)}
+            ${escapeHTML(order.last_name)}
+          </strong>
+
+          <p>
+            📞 ${escapeHTML(order.phone)}
+          </p>
+
+          <p>
+            💰 ${money(order.total)}
+          </p>
+
+          <p>
+            📦 ${escapeHTML(order.method)}
+          </p>
+
+          <p>
+            Statut : ${escapeHTML(order.status)}
+          </p>
+
+        </div>
+
+        <div class="order-actions">
+
+          <button
+            data-order-status="${order.id}"
+            data-status="processing">
+            En préparation
+          </button>
+
+          <button
+            data-order-status="${order.id}"
+            data-status="completed">
+            Terminée
+          </button>
+
+        </div>
+
+      </div>
+    `;
+
+  }).join("");
 }
 
-function addAIMessage(text,type="bot"){
+async function updateOrderStatus(id, status) {
 
-  const box = $("aiMessages");
-
-  if(!box) return;
-
-  const message = document.createElement("div");
-
-  message.className =
-    `ai-msg ${type}`;
-
-  message.textContent = text;
-
-  box.appendChild(message);
-  box.scrollTop = box.scrollHeight;
-}
-
-function sendAI(){
-
-  const input = $("aiInput");
-
-  if(!input) return;
-
-  const text = input.value.trim();
-
-  if(!text) return;
-
-  addAIMessage(text,"user");
-
-  input.value="";
-
-  setTimeout(()=>{
-    addAIMessage(aiReply(text),"bot");
-  },300);
-}
-
-$("aiFloat")?.addEventListener("click",()=>{
-  $("aiBox")?.classList.toggle("hidden");
-});
-
-$("aiClose")?.addEventListener("click",()=>{
-  $("aiBox")?.classList.add("hidden");
-});
-
-$("aiSend")?.addEventListener("click",sendAI);
-
-$("aiInput")?.addEventListener("keydown",event=>{
-  if(event.key === "Enter"){
-    event.preventDefault();
-    sendAI();
+  if (!(await isAdmin())) {
+    alert("Accès refusé.");
+    return;
   }
-});
 
-document.querySelectorAll("[data-ai]").forEach(button=>{
+  const { error } = await db
+    .from("orders")
+    .update({ status })
+    .eq("id", id);
 
-  button.onclick=()=>{
+  if (error) {
+    alert(error.message);
+    return;
+  }
 
-    const type = button.dataset.ai;
+  await loadAdminOrders();
+}
 
-    if(type === "produits"){
-      addAIMessage(
-        "🛍️ Ouvre Boutique pour découvrir les produits disponibles."
-      );
-    }
+// =========================
+// MHD IA
+// =========================
 
-    if(type === "commande"){
-      addAIMessage(
-        "📦 Ajoute tes produits au panier puis passe commande."
-      );
-    }
+function toggleIA() {
 
-    if(type === "support"){
-      addAIMessage(
-        "💬 Support vendeur : +221 78 748 81 99."
-      );
-    }
+  const box = $("mhdIABox");
 
-  };
+  if (!box) return;
 
-});
+  box.classList.toggle("show");
+}
 
-/* =========================================================
-   DÉMARRAGE
-========================================================= */
+function closeIA() {
 
-async function init(){
+  const box = $("mhdIABox");
+
+  if (!box) return;
+
+  box.classList.remove("show");
+}
+
+// =========================
+// INITIALISATION
+// =========================
+
+async function init() {
+
+  const { data } = await db.auth.getSession();
+
+  currentUser = data?.session?.user || null;
 
   updateCartCount();
 
-  await loadUser();
   await loadProducts();
 
-  goTo("accueil");
+  if (currentUser) {
+    await loadProfile();
+  }
+
+  const search = $("search");
+
+  if (search) {
+    search.addEventListener("input", renderProducts);
+  }
+
+  // Auth automatique après retour Google/Apple
+  db.auth.onAuthStateChange(async (_event, session) => {
+
+    currentUser = session?.user || null;
+
+    if (currentUser) {
+      await loadProfile();
+    }
+
+  });
+
+  // Commandes en temps réel pour l'admin
+  db
+    .channel("mhd-orders")
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "orders"
+      },
+      async () => {
+
+        if (currentUser && await isAdmin()) {
+          await loadAdminOrders();
+        }
+
+      }
+    )
+    .subscribe();
 }
 
-init();
+document.addEventListener("DOMContentLoaded", init);
