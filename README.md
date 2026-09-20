@@ -1,5 +1,11 @@
-MHD SHOP V3 — prototype
-Espace Admin démo : ajouter, modifier, supprimer et gérer la disponibilité des produits.
-Les produits sont stockés dans localStorage sur cet appareil. Ce n’est pas une vraie sécurité serveur.
-GitHub Pages reste statique. Une prochaine étape pourra connecter une vraie base de données et une authentification sécurisée.
-Utiliser uniquement des produits/services que vous êtes autorisé à vendre ou distribuer.
+# MHD SHOP V4
+
+Version statique connectée à Supabase Auth et à la table `products`.
+
+## Mise en place
+1. Exécuter `setup.sql` dans Supabase > SQL Editor.
+2. Vérifier que Google est activé dans Authentication > Providers.
+3. Remplacer les fichiers du dépôt GitHub par ceux de ce ZIP.
+4. Tester la connexion Email et Google.
+
+La clé `sb_publishable_...` est prévue pour être utilisée côté navigateur. Ne jamais mettre une Secret key/service_role ou un Google Client Secret dans le code public.
