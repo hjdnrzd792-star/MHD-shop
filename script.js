@@ -1,22 +1,45 @@
+/* =========================================================
+   MHD SHOP — SCRIPT V7
+   Navigation + panier + compte + produits + commandes + admin
+   ========================================================= */
+
 const SUPABASE_URL = "https://oabjxsclanvgmvnezabj.supabase.co";
 const SUPABASE_KEY = "sb_publishable_Wccb86Hdfbxwx1tj0ciPDg_aRv8yqje";
 
-const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabaseClient = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_KEY
+);
 
 const WHATSAPP = "221787488199";
 
 let currentUser = null;
 let products = [];
-let cart = JSON.parse(localStorage.getItem("mhd_cart") || "[]");
 
-// =========================
-// OUTILS
-// =========================
+let cart = [];
 
-const $ = (id) => document.getElementById(id);
+try {
+  cart = JSON.parse(localStorage.getItem("mhd_cart") || "[]");
+  if (!Array.isArray(cart)) cart = [];
+} catch {
+  cart = [];
+}
 
-function escapeHTML(value = "") {
-  return String(value)
+
+/* =========================================================
+   OUTILS
+   ========================================================= */
+
+function $(id) {
+  return document.getElementById(id);
+}
+
+function money(value) {
+  return Number(value || 0).toLocaleString("fr-FR") + " FCFA";
+}
+
+function escapeHTML(value) {
+  return String(value ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -24,93 +47,137 @@ function escapeHTML(value = "") {
     .replace(/'/g, "&#039;");
 }
 
-function money(value) {
-  return Number(value || 0).toLocaleString("fr-FR") + " FCFA";
-}
 
-// =========================
-// NAVIGATION
-// =========================
+/* =========================================================
+   NAVIGATION
+   ========================================================= */
 
-function goTo(page) {
-  document.querySelectorAll(".page").forEach((p) => {
-    p.classList.remove("active");
+function goTo(pageId) {
+
+  const pages = document.querySelectorAll(".page");
+
+  pages.forEach(function(page) {
+    page.classList.remove("active");
   });
 
-  const target = $(page);
+  const page = $(pageId);
 
-  if (target) {
-    target.classList.add("active");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  if (!page) {
+    console.warn("Page introuvable :", pageId);
+    return;
   }
 
-  document.querySelectorAll("[data-go]").forEach((button) => {
-    button.classList.remove("active");
+  page.classList.add("active");
+
+  document.querySelectorAll(".bottom-nav [data-go]").forEach(
+    function(button) {
+
+      button.classList.remove("active");
+
+      if (button.dataset.go === pageId) {
+        button.classList.add("active");
+      }
+
+    }
+  );
+
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth"
   });
 
-  document
-    .querySelectorAll(`[data-go="${page}"]`)
-    .forEach((button) => button.classList.add("active"));
 
-  if (page === "panier") renderCart();
-  if (page === "commande") prepareCheckout();
-  if (page === "compte") loadProfile();
-  if (page === "admin") openAdmin();
+  if (pageId === "panier") {
+    renderCart();
+  }
+
+  if (pageId === "commande") {
+    prepareCheckout();
+  }
+
+  if (pageId === "compte") {
+    loadProfile();
+  }
+
+  if (pageId === "admin") {
+    openAdmin();
+  }
 }
 
-// =========================
-// CLICS — VERSION IPHONE
-// =========================
 
-document.addEventListener("click", function (event) {
+/* =========================================================
+   GESTION UNIVERSELLE DES BOUTONS
+   ========================================================= */
 
-  const element = event.target instanceof Element
-    ? event.target
-    : event.target.parentElement;
+document.addEventListener("click", function(event) {
 
-  if (!element) return;
+  let target = event.target;
 
-  // Navigation
-  const navigation = element.closest("[data-go]");
+  if (!(target instanceof Element)) {
+    target = target.parentElement;
+  }
 
-  if (navigation) {
+  if (!target) return;
+
+
+  /* Navigation */
+
+  const navigationButton = target.closest("[data-go]");
+
+  if (navigationButton) {
+
     event.preventDefault();
     event.stopPropagation();
 
-    const page = navigation.getAttribute("data-go");
+    const pageId =
+      navigationButton.getAttribute("data-go");
 
-    if (page) {
-      goTo(page);
-    }
+    goTo(pageId);
 
     return;
   }
 
-  // Ajouter au panier
-  const addButton = element.closest("[data-add]");
+
+  /* Ajouter panier */
+
+  const addButton = target.closest("[data-add]");
 
   if (addButton) {
-    event.preventDefault();
-    event.stopPropagation();
 
-    addToCart(addButton.getAttribute("data-add"));
+    event.preventDefault();
+
+    addToCart(
+      addButton.getAttribute("data-add")
+    );
+
     return;
   }
 
-  // Supprimer du panier
-  const removeButton = element.closest("[data-remove]");
+
+  /* Supprimer panier */
+
+  const removeButton =
+    target.closest("[data-remove]");
 
   if (removeButton) {
+
     event.preventDefault();
 
-    removeFromCart(removeButton.getAttribute("data-remove"));
+    removeFromCart(
+      removeButton.getAttribute("data-remove")
+    );
+
     return;
   }
 
-  // Quantité +
-  const plusButton = element.closest("[data-plus]");
+
+  /* + */
+
+  const plusButton =
+    target.closest("[data-plus]");
 
   if (plusButton) {
+
     event.preventDefault();
 
     changeQuantity(
@@ -121,10 +188,14 @@ document.addEventListener("click", function (event) {
     return;
   }
 
-  // Quantité -
-  const minusButton = element.closest("[data-minus]");
+
+  /* - */
+
+  const minusButton =
+    target.closest("[data-minus]");
 
   if (minusButton) {
+
     event.preventDefault();
 
     changeQuantity(
@@ -135,485 +206,800 @@ document.addEventListener("click", function (event) {
     return;
   }
 
-  // MHD IA
-  if (element.closest("#mhdIAButton")) {
-    event.preventDefault();
-    toggleIA();
-    return;
-  }
 
-  // Fermer IA
-  if (element.closest("#closeIA")) {
-    event.preventDefault();
-    closeIA();
-    return;
-  }
+  /* Connexion */
 
-  // Déconnexion
-  if (element.closest("#logoutBtn")) {
-    event.preventDefault();
-    logout();
-    return;
-  }
+  if (target.closest("#loginBtn")) {
 
-  // Admin quitter
-  if (element.closest("#adminExit")) {
     event.preventDefault();
-    goTo("accueil");
-    return;
-  }
 
-  // Connexion
-  if (element.closest("#loginBtn")) {
-    event.preventDefault();
     login();
+
     return;
   }
 
-  // Inscription
-  if (element.closest("#signupBtn")) {
+
+  /* Inscription */
+
+  if (target.closest("#signupBtn")) {
+
     event.preventDefault();
+
     signup();
+
     return;
   }
 
-  // Google
-  if (element.closest("#googleBtn")) {
+
+  /* Google */
+
+  if (target.closest("#googleBtn")) {
+
     event.preventDefault();
+
     loginGoogle();
+
     return;
   }
 
-  // Apple
-  if (element.closest("#appleBtn")) {
+
+  /* Apple */
+
+  if (target.closest("#appleBtn")) {
+
     event.preventDefault();
+
     loginApple();
+
     return;
   }
 
-  // Sauvegarde profil
-  if (element.closest("#saveProfile")) {
+
+  /* Sauvegarde */
+
+  if (target.closest("#saveProfile")) {
+
     event.preventDefault();
+
     saveProfile();
+
     return;
   }
 
-  // Vérification téléphone
-  if (element.closest("#sendPhoneCode")) {
+
+  /* SMS */
+
+  if (target.closest("#sendPhoneCode")) {
+
     event.preventDefault();
+
     sendPhoneCode();
+
     return;
   }
 
-  if (element.closest("#verifyPhoneCode")) {
+
+  if (target.closest("#verifyPhoneCode")) {
+
     event.preventDefault();
+
     verifyPhoneCode();
+
     return;
   }
 
-  // Commander
-  if (element.closest("#siteOrderBtn")) {
+
+  /* Commande site */
+
+  if (target.closest("#siteOrderBtn")) {
+
     event.preventDefault();
+
     placeOrder("site");
+
     return;
   }
 
-  if (element.closest("#whatsappOrderBtn")) {
+
+  /* Commande WhatsApp */
+
+  if (target.closest("#whatsappOrderBtn")) {
+
     event.preventDefault();
+
     placeOrder("whatsapp");
+
     return;
   }
 
-  // Admin produit
-  if (element.closest("#addProductBtn")) {
+
+  /* Ajouter produit admin */
+
+  if (target.closest("#addProductBtn")) {
+
     event.preventDefault();
+
     addProduct();
+
     return;
   }
 
-  const deleteProductButton = element.closest("[data-delete-product]");
+
+  /* Supprimer produit */
+
+  const deleteProductButton =
+    target.closest("[data-delete-product]");
 
   if (deleteProductButton) {
+
     event.preventDefault();
 
     deleteProduct(
-      deleteProductButton.getAttribute("data-delete-product")
+      deleteProductButton.dataset.deleteProduct
     );
 
     return;
   }
 
-  const statusButton = element.closest("[data-order-status]");
 
-  if (statusButton) {
+  /* Statut commande */
+
+  const orderStatusButton =
+    target.closest("[data-order-status]");
+
+  if (orderStatusButton) {
+
     event.preventDefault();
 
     updateOrderStatus(
-      statusButton.getAttribute("data-order-status"),
-      statusButton.getAttribute("data-status")
+      orderStatusButton.dataset.orderStatus,
+      orderStatusButton.dataset.status
     );
+
+    return;
+  }
+
+
+  /* Déconnexion */
+
+  if (target.closest("#logoutBtn")) {
+
+    event.preventDefault();
+
+    logout();
+
+    return;
+  }
+
+
+  /* Quitter admin */
+
+  if (target.closest("#adminExit")) {
+
+    event.preventDefault();
+
+    goTo("accueil");
+
+    return;
+  }
+
+
+  /* MHD IA */
+
+  if (target.closest("#mhdIAButton")) {
+
+    event.preventDefault();
+
+    toggleIA();
+
+    return;
+  }
+
+
+  if (target.closest("#closeIA")) {
+
+    event.preventDefault();
+
+    closeIA();
 
     return;
   }
 
 });
 
-// =========================
-// AUTH
-// =========================
+
+/* =========================================================
+   AUTHENTIFICATION
+   ========================================================= */
 
 async function login() {
 
-  const email = $("loginEmail")?.value.trim();
-  const password = $("loginPassword")?.value;
+  const email =
+    $("loginEmail")?.value.trim();
+
+  const password =
+    $("loginPassword")?.value;
 
   if (!email || !password) {
-    alert("Entre ton email et ton mot de passe.");
+
+    alert(
+      "Entre ton email et ton mot de passe."
+    );
+
     return;
   }
 
-  const { data, error } = await db.auth.signInWithPassword({
-    email,
-    password
-  });
 
-  if (error) {
-    alert(error.message);
+  const result =
+    await supabaseClient.auth.signInWithPassword({
+      email: email,
+      password: password
+    });
+
+
+  if (result.error) {
+
+    alert(result.error.message);
+
     return;
   }
 
-  currentUser = data.user;
+
+  currentUser = result.data.user;
+
+  await loadUser();
 
   alert("Connexion réussie !");
-  await loadUser();
 
   goTo("compte");
 }
+
 
 async function signup() {
 
-  const email = $("signupEmail")?.value.trim();
-  const password = $("signupPassword")?.value;
+  const email =
+    $("signupEmail")?.value.trim();
+
+  const password =
+    $("signupPassword")?.value;
+
 
   if (!email || !password) {
-    alert("Remplis tous les champs.");
+
+    alert(
+      "Remplis ton email et ton mot de passe."
+    );
+
     return;
   }
+
 
   if (password.length < 6) {
-    alert("Le mot de passe doit avoir au moins 6 caractères.");
+
+    alert(
+      "Le mot de passe doit contenir au moins 6 caractères."
+    );
+
     return;
   }
 
-  const { data, error } = await db.auth.signUp({
-    email,
-    password
-  });
 
-  if (error) {
-    alert(error.message);
+  const result =
+    await supabaseClient.auth.signUp({
+      email: email,
+      password: password
+    });
+
+
+  if (result.error) {
+
+    alert(result.error.message);
+
     return;
   }
 
-  currentUser = data.user;
+
+  currentUser =
+    result.data.user;
+
 
   if (currentUser) {
-    await db.from("profiles").upsert({
-      id: currentUser.id
-    });
+
+    await supabaseClient
+      .from("profiles")
+      .upsert({
+        id: currentUser.id
+      });
+
   }
 
+
   alert("Compte créé !");
+
   goTo("compte");
 }
 
+
 async function loginGoogle() {
 
-  const { error } = await db.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      redirectTo: window.location.href
-    }
-  });
+  const result =
+    await supabaseClient.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: window.location.href
+      }
+    });
 
-  if (error) {
-    alert(error.message);
+
+  if (result.error) {
+
+    alert(result.error.message);
+
   }
 }
+
 
 async function loginApple() {
 
-  const { error } = await db.auth.signInWithOAuth({
-    provider: "apple",
-    options: {
-      redirectTo: window.location.href
-    }
-  });
+  const result =
+    await supabaseClient.auth.signInWithOAuth({
+      provider: "apple",
+      options: {
+        redirectTo: window.location.href
+      }
+    });
 
-  if (error) {
+
+  if (result.error) {
+
     alert(
-      "Apple Login doit d'abord être configuré dans Supabase."
+      "Apple Login doit être configuré dans Supabase."
     );
+
   }
 }
 
+
 async function logout() {
 
-  await db.auth.signOut();
+  await supabaseClient.auth.signOut();
 
   currentUser = null;
 
-  alert("Déconnexion réussie.");
-
   goTo("accueil");
+
+  alert("Déconnexion réussie.");
 }
 
-// =========================
-// UTILISATEUR
-// =========================
+
+/* =========================================================
+   UTILISATEUR
+   ========================================================= */
 
 async function loadUser() {
 
-  const { data } = await db.auth.getUser();
+  const result =
+    await supabaseClient.auth.getUser();
 
-  currentUser = data?.user || null;
+  currentUser =
+    result.data?.user || null;
 
-  if (!currentUser) return;
 
-  await loadProfile();
+  if (currentUser) {
+    await loadProfile();
+  }
 }
+
 
 async function loadProfile() {
 
   if (!currentUser) {
-    const { data } = await db.auth.getUser();
-    currentUser = data?.user || null;
+
+    const result =
+      await supabaseClient.auth.getUser();
+
+    currentUser =
+      result.data?.user || null;
   }
+
 
   if (!currentUser) return;
 
-  const { data, error } = await db
-    .from("profiles")
-    .select("*")
-    .eq("id", currentUser.id)
-    .maybeSingle();
 
-  if (error) {
-    console.error(error);
+  const result =
+    await supabaseClient
+      .from("profiles")
+      .select("*")
+      .eq("id", currentUser.id)
+      .maybeSingle();
+
+
+  if (result.error) {
+
+    console.error(
+      "Erreur profil :",
+      result.error
+    );
+
     return;
   }
 
-  if (!data) return;
 
-  if ($("firstName")) $("firstName").value = data.first_name || "";
-  if ($("lastName")) $("lastName").value = data.last_name || "";
-  if ($("profilePhone")) $("profilePhone").value = data.phone || "";
+  const profile =
+    result.data;
 
-  const verified = $("phoneStatus");
-
-  if (verified) {
-    verified.textContent =
-      data.phone_verified
-        ? "✓ Numéro vérifié"
-        : "⚠ Numéro non vérifié";
-  }
 
   if ($("profileEmail")) {
-    $("profileEmail").value = currentUser.email || "";
+    $("profileEmail").value =
+      currentUser.email || "";
+  }
+
+
+  if (!profile) return;
+
+
+  if ($("firstName")) {
+    $("firstName").value =
+      profile.first_name || "";
+  }
+
+
+  if ($("lastName")) {
+    $("lastName").value =
+      profile.last_name || "";
+  }
+
+
+  if ($("profilePhone")) {
+    $("profilePhone").value =
+      profile.phone || "";
+  }
+
+
+  if ($("phoneStatus")) {
+
+    $("phoneStatus").textContent =
+      profile.phone_verified
+        ? "✓ Numéro vérifié"
+        : "⚠ Numéro non vérifié";
+
   }
 }
+
 
 async function saveProfile() {
 
   if (!currentUser) {
-    alert("Connecte-toi d'abord.");
-    goTo("compte");
+
+    alert(
+      "Connecte-toi d'abord."
+    );
+
     return;
   }
 
-  const firstName = $("firstName")?.value.trim() || "";
-  const lastName = $("lastName")?.value.trim() || "";
-  const phone = $("profilePhone")?.value.trim() || "";
 
-  const { error } = await db
-    .from("profiles")
-    .upsert({
-      id: currentUser.id,
-      first_name: firstName,
-      last_name: lastName,
-      phone
-    });
+  const firstName =
+    $("firstName")?.value.trim() || "";
 
-  if (error) {
-    alert(error.message);
+  const lastName =
+    $("lastName")?.value.trim() || "";
+
+  const phone =
+    $("profilePhone")?.value.trim() || "";
+
+
+  const result =
+    await supabaseClient
+      .from("profiles")
+      .upsert({
+        id: currentUser.id,
+        first_name: firstName,
+        last_name: lastName,
+        phone: phone
+      });
+
+
+  if (result.error) {
+
+    alert(result.error.message);
+
     return;
   }
 
-  alert("Profil enregistré !");
+
+  alert(
+    "Profil enregistré !"
+  );
+
+  await loadProfile();
 }
 
-// =========================
-// TÉLÉPHONE OTP
-// =========================
+
+/* =========================================================
+   VÉRIFICATION TÉLÉPHONE
+   ========================================================= */
 
 async function sendPhoneCode() {
 
   if (!currentUser) {
-    alert("Connecte-toi d'abord.");
+
+    alert(
+      "Connecte-toi d'abord."
+    );
+
     return;
   }
 
-  const phone = $("profilePhone")?.value.trim();
+
+  const phone =
+    $("profilePhone")?.value.trim();
+
 
   if (!phone) {
-    alert("Entre ton numéro de téléphone.");
+
+    alert(
+      "Entre ton numéro."
+    );
+
     return;
   }
 
-  const { error } = await db.auth.updateUser({
-    phone
-  });
 
-  if (error) {
-    alert(error.message);
+  const result =
+    await supabaseClient.auth.updateUser({
+      phone: phone
+    });
+
+
+  if (result.error) {
+
+    alert(result.error.message);
+
     return;
   }
 
-  alert("Code envoyé par SMS.");
+
+  alert(
+    "Le code de vérification a été envoyé."
+  );
 }
+
 
 async function verifyPhoneCode() {
 
   if (!currentUser) return;
 
-  const phone = $("profilePhone")?.value.trim();
-  const token = $("phoneCode")?.value.trim();
+
+  const phone =
+    $("profilePhone")?.value.trim();
+
+  const token =
+    $("phoneCode")?.value.trim();
+
 
   if (!phone || !token) {
-    alert("Entre le code reçu par SMS.");
+
+    alert(
+      "Entre le code reçu par SMS."
+    );
+
     return;
   }
 
-  const { error } = await db.auth.verifyOtp({
-    phone,
-    token,
-    type: "phone_change"
-  });
 
-  if (error) {
-    alert(error.message);
+  const result =
+    await supabaseClient.auth.verifyOtp({
+      phone: phone,
+      token: token,
+      type: "phone_change"
+    });
+
+
+  if (result.error) {
+
+    alert(result.error.message);
+
     return;
   }
 
-  await db
+
+  await supabaseClient
     .from("profiles")
     .update({
-      phone,
+      phone: phone,
       phone_verified: true
     })
     .eq("id", currentUser.id);
 
-  alert("Numéro vérifié !");
+
+  alert(
+    "Numéro vérifié avec succès !"
+  );
+
 
   await loadProfile();
 }
 
-// =========================
-// PRODUITS
-// =========================
+
+/* =========================================================
+   PRODUITS
+   ========================================================= */
 
 async function loadProducts() {
 
-  const { data, error } = await db
-    .from("products")
-    .select("*")
-    .order("created_at", { ascending: false });
+  const result =
+    await supabaseClient
+      .from("products")
+      .select("*")
+      .order("created_at", {
+        ascending: false
+      });
 
-  if (error) {
-    console.error(error);
+
+  if (result.error) {
+
+    console.error(
+      "Erreur produits :",
+      result.error
+    );
+
     return;
   }
 
-  products = data || [];
+
+  products =
+    result.data || [];
+
 
   renderProducts();
+
+  renderHomeProducts();
 }
+
+
+function productCard(product) {
+
+  const image =
+    product.image
+      ? `
+        <img
+          src="${escapeHTML(product.image)}"
+          alt="${escapeHTML(product.name)}">
+      `
+      : `
+        <div class="no-image">
+          🎮
+        </div>
+      `;
+
+
+  return `
+    <article class="product-card">
+
+      <div class="product-image">
+        ${image}
+      </div>
+
+      <div class="product-info">
+
+        <div class="product-category">
+          ${escapeHTML(product.category)}
+        </div>
+
+        <h3>
+          ${escapeHTML(product.name)}
+        </h3>
+
+        <strong>
+          ${money(product.price)}
+        </strong>
+
+        <button
+          type="button"
+          class="primary-button"
+          data-add="${product.id}">
+
+          Ajouter au panier
+
+        </button>
+
+      </div>
+
+    </article>
+  `;
+}
+
 
 function renderProducts() {
 
-  const container = $("productGrid");
+  const container =
+    $("productGrid");
 
   if (!container) return;
 
-  const search = $("search")?.value.toLowerCase().trim() || "";
 
-  const filtered = products.filter((product) => {
+  const search =
+    $("search")?.value
+      .toLowerCase()
+      .trim() || "";
 
-    return (
-      product.name.toLowerCase().includes(search) ||
-      product.category.toLowerCase().includes(search)
-    );
 
-  });
+  const filtered =
+    products.filter(function(product) {
+
+      return (
+        String(product.name)
+          .toLowerCase()
+          .includes(search)
+        ||
+        String(product.category)
+          .toLowerCase()
+          .includes(search)
+      );
+
+    });
+
 
   if (!filtered.length) {
 
     container.innerHTML = `
       <div class="empty-state">
+
         <h3>Aucun produit</h3>
-        <p>Essaie une autre recherche.</p>
+
+        <p>
+          Aucun produit ne correspond à ta recherche.
+        </p>
+
       </div>
     `;
 
     return;
   }
 
-  container.innerHTML = filtered.map((product) => {
 
-    return `
-      <article class="product-card">
-
-        <div class="product-image">
-
-          ${
-            product.image
-              ? `<img src="${product.image}" alt="${escapeHTML(product.name)}">`
-              : `<div class="no-image">🎮</div>`
-          }
-
-        </div>
-
-        <div class="product-info">
-
-          <div class="product-category">
-            ${escapeHTML(product.category)}
-          </div>
-
-          <h3>
-            ${escapeHTML(product.name)}
-          </h3>
-
-          <strong>
-            ${money(product.price)}
-          </strong>
-
-          <button
-            class="primary-button"
-            data-add="${product.id}">
-            Ajouter au panier
-          </button>
-
-        </div>
-
-      </article>
-    `;
-
-  }).join("");
+  container.innerHTML =
+    filtered
+      .map(productCard)
+      .join("");
 }
 
-// =========================
-// PANIER
-// =========================
+
+function renderHomeProducts() {
+
+  const container =
+    $("homeProducts");
+
+  if (!container) return;
+
+
+  const featured =
+    products.slice(0, 4);
+
+
+  if (!featured.length) {
+
+    container.innerHTML = `
+      <div class="empty-state">
+        <p>Les produits arrivent bientôt.</p>
+      </div>
+    `;
+
+    return;
+  }
+
+
+  container.innerHTML =
+    featured
+      .map(productCard)
+      .join("");
+}
+
+
+/* =========================================================
+   PANIER
+   ========================================================= */
 
 function saveCart() {
 
@@ -625,35 +1011,62 @@ function saveCart() {
   updateCartCount();
 }
 
+
 function updateCartCount() {
 
-  const count = cart.reduce(
-    (total, item) => total + item.quantity,
-    0
-  );
+  const count =
+    cart.reduce(
+      function(total, item) {
+        return total + Number(item.quantity || 0);
+      },
+      0
+    );
+
 
   if ($("cartCount")) {
-    $("cartCount").textContent = count;
+
+    $("cartCount").textContent =
+      count;
+
   }
 }
 
+
 function addToCart(productId) {
 
-  const product = products.find(
-    (p) => String(p.id) === String(productId)
-  );
+  const product =
+    products.find(function(product) {
+
+      return String(product.id) ===
+        String(productId);
+
+    });
+
 
   if (!product) {
-    alert("Produit introuvable.");
+
+    alert(
+      "Produit introuvable."
+    );
+
     return;
   }
 
-  const existing = cart.find(
-    (item) => String(item.id) === String(product.id)
-  );
+
+  const existing =
+    cart.find(function(item) {
+
+      return String(item.id) ===
+        String(product.id);
+
+    });
+
 
   if (existing) {
-    existing.quantity++;
+
+    existing.quantity =
+      Number(existing.quantity || 0) + 1;
+
   } else {
 
     cart.push({
@@ -666,413 +1079,758 @@ function addToCart(productId) {
 
   }
 
+
   saveCart();
 
-  alert("Produit ajouté au panier 🛒");
+  renderCart();
+
+
+  alert(
+    "Produit ajouté au panier 🛒"
+  );
 }
+
 
 function removeFromCart(productId) {
 
-  cart = cart.filter(
-    (item) => String(item.id) !== String(productId)
-  );
+  cart =
+    cart.filter(function(item) {
+
+      return String(item.id) !==
+        String(productId);
+
+    });
+
 
   saveCart();
+
   renderCart();
 }
+
 
 function changeQuantity(productId, amount) {
 
-  const item = cart.find(
-    (item) => String(item.id) === String(productId)
-  );
+  const item =
+    cart.find(function(item) {
+
+      return String(item.id) ===
+        String(productId);
+
+    });
+
 
   if (!item) return;
 
-  item.quantity += amount;
+
+  item.quantity =
+    Number(item.quantity || 0) + amount;
+
 
   if (item.quantity <= 0) {
+
     removeFromCart(productId);
+
     return;
   }
 
+
   saveCart();
+
   renderCart();
 }
 
+
 function renderCart() {
 
-  const container = $("cartItems");
+  const container =
+    $("cartItems");
 
   if (!container) return;
+
 
   if (!cart.length) {
 
     container.innerHTML = `
       <div class="empty-state">
-        <h3>Ton panier est vide 🛒</h3>
+
+        <h3>
+          Ton panier est vide 🛒
+        </h3>
+
         <button
+          type="button"
           class="primary-button"
           data-go="boutique">
+
           Voir la boutique
+
         </button>
+
       </div>
     `;
 
+
     if ($("cartTotal")) {
-      $("cartTotal").textContent = "0 FCFA";
+      $("cartTotal").textContent =
+        "0 FCFA";
     }
 
     return;
   }
 
+
   let total = 0;
 
-  container.innerHTML = cart.map((item) => {
 
-    const subtotal =
-      Number(item.price) * Number(item.quantity);
+  container.innerHTML =
+    cart.map(function(item) {
 
-    total += subtotal;
+      const subtotal =
+        Number(item.price) *
+        Number(item.quantity);
 
-    return `
-      <div class="cart-item">
 
-        ${
-          item.image
-            ? `<img src="${item.image}" alt="">`
-            : ""
-        }
+      total += subtotal;
 
-        <div class="cart-item-info">
 
-          <strong>${escapeHTML(item.name)}</strong>
+      return `
+        <div class="cart-item">
 
-          <span>${money(item.price)}</span>
+          ${
+            item.image
+              ? `
+                <img
+                  src="${escapeHTML(item.image)}"
+                  alt="">
+              `
+              : ""
+          }
 
-          <div class="quantity-controls">
+          <div class="cart-item-info">
 
-            <button data-minus="${item.id}">
-              −
-            </button>
+            <strong>
+              ${escapeHTML(item.name)}
+            </strong>
 
-            <span>${item.quantity}</span>
+            <span>
+              ${money(item.price)}
+            </span>
 
-            <button data-plus="${item.id}">
-              +
-            </button>
+            <div class="quantity-controls">
+
+              <button
+                type="button"
+                data-minus="${item.id}">
+                −
+              </button>
+
+              <span>
+                ${item.quantity}
+              </span>
+
+              <button
+                type="button"
+                data-plus="${item.id}">
+                +
+              </button>
+
+            </div>
 
           </div>
 
+
+          <button
+            type="button"
+            class="delete-button"
+            data-remove="${item.id}">
+
+            🗑️
+
+          </button>
+
         </div>
+      `;
 
-        <button
-          class="delete-button"
-          data-remove="${item.id}">
-          🗑️
-        </button>
+    }).join("");
 
-      </div>
-    `;
-
-  }).join("");
 
   if ($("cartTotal")) {
-    $("cartTotal").textContent = money(total);
+
+    $("cartTotal").textContent =
+      money(total);
+
   }
 }
 
-// =========================
-// COMMANDE
-// =========================
 
-function prepareCheckout() {
+/* =========================================================
+   CHECKOUT
+   ========================================================= */
+
+async function prepareCheckout() {
 
   if (!currentUser) {
-    alert("Connecte-toi avant de commander.");
+
+    alert(
+      "Connecte-toi avant de commander."
+    );
+
     goTo("compte");
+
     return;
   }
+
 
   if (!cart.length) {
-    alert("Ton panier est vide.");
+
+    alert(
+      "Ton panier est vide."
+    );
+
     goTo("boutique");
+
     return;
   }
 
-  loadProfile();
+
+  await loadProfile();
+
+
+  const result =
+    await supabaseClient
+      .from("profiles")
+      .select("first_name,last_name,phone")
+      .eq("id", currentUser.id)
+      .maybeSingle();
+
+
+  if (result.data) {
+
+    if ($("orderFirstName")) {
+      $("orderFirstName").value =
+        result.data.first_name || "";
+    }
+
+    if ($("orderLastName")) {
+      $("orderLastName").value =
+        result.data.last_name || "";
+    }
+
+    if ($("orderPhone")) {
+      $("orderPhone").value =
+        result.data.phone || "";
+    }
+
+  }
 }
+
 
 async function placeOrder(method) {
 
   if (!currentUser) {
-    alert("Connecte-toi avant de commander.");
+
+    alert(
+      "Connecte-toi avant de commander."
+    );
+
     goTo("compte");
+
     return;
   }
+
 
   if (!cart.length) {
-    alert("Ton panier est vide.");
+
+    alert(
+      "Ton panier est vide."
+    );
+
     return;
   }
 
-  const firstName = $("orderFirstName")?.value.trim() || "";
-  const lastName = $("orderLastName")?.value.trim() || "";
-  const phone = $("orderPhone")?.value.trim() || "";
 
-  if (!firstName || !lastName || !phone) {
-    alert("Remplis ton prénom, ton nom et ton numéro.");
+  const firstName =
+    $("orderFirstName")?.value.trim() || "";
+
+  const lastName =
+    $("orderLastName")?.value.trim() || "";
+
+  const phone =
+    $("orderPhone")?.value.trim() || "";
+
+
+  if (!firstName ||
+      !lastName ||
+      !phone) {
+
+    alert(
+      "Remplis ton prénom, ton nom et ton numéro."
+    );
+
     return;
   }
 
-  const { data: profile } = await db
-    .from("profiles")
-    .select("phone_verified")
-    .eq("id", currentUser.id)
-    .maybeSingle();
 
-  if (!profile?.phone_verified) {
-    alert("Ton numéro doit être vérifié avant de commander.");
+  const profile =
+    await supabaseClient
+      .from("profiles")
+      .select("phone_verified")
+      .eq("id", currentUser.id)
+      .maybeSingle();
+
+
+  if (!profile.data?.phone_verified) {
+
+    alert(
+      "Ton numéro doit être vérifié avant de commander."
+    );
+
     goTo("compte");
+
     return;
   }
 
-  const total = cart.reduce(
-    (sum, item) =>
-      sum + Number(item.price) * Number(item.quantity),
-    0
-  );
 
-  const { error } = await db
-    .from("orders")
-    .insert({
-      user_id: currentUser.id,
-      first_name: firstName,
-      last_name: lastName,
-      phone,
-      phone_verified: true,
-      items: cart,
-      total,
-      method,
-      status: "new"
-    });
+  const total =
+    cart.reduce(
+      function(sum, item) {
 
-  if (error) {
-    alert(error.message);
+        return sum +
+          Number(item.price) *
+          Number(item.quantity);
+
+      },
+      0
+    );
+
+
+  const result =
+    await supabaseClient
+      .from("orders")
+      .insert({
+        user_id: currentUser.id,
+        first_name: firstName,
+        last_name: lastName,
+        phone: phone,
+        phone_verified: true,
+        items: cart,
+        total: total,
+        method: method,
+        status: "new"
+      });
+
+
+  if (result.error) {
+
+    alert(
+      result.error.message
+    );
+
     return;
   }
 
-  const message =
-    `🛍️ Nouvelle commande MHD SHOP%0A%0A` +
-    `Client : ${firstName} ${lastName}%0A` +
-    `Téléphone : ${phone}%0A%0A` +
-    cart.map(
-      item =>
-        `• ${item.name} x${item.quantity} — ${money(
-          item.price * item.quantity
-        )}`
-    ).join("%0A") +
-    `%0A%0ATotal : ${money(total)}`;
+
+  const text =
+    "🛍️ Nouvelle commande MHD SHOP\n\n" +
+
+    "Client : " +
+    firstName +
+    " " +
+    lastName +
+    "\n" +
+
+    "Téléphone : " +
+    phone +
+    "\n\n" +
+
+    cart.map(function(item) {
+
+      return (
+        "• " +
+        item.name +
+        " x" +
+        item.quantity +
+        " — " +
+        money(
+          Number(item.price) *
+          Number(item.quantity)
+        )
+      );
+
+    }).join("\n") +
+
+    "\n\nTotal : " +
+    money(total);
+
 
   cart = [];
+
   saveCart();
+
 
   if (method === "whatsapp") {
 
     window.location.href =
-      `https://wa.me/${WHATSAPP}?text=${message}`;
+      "https://wa.me/" +
+      WHATSAPP +
+      "?text=" +
+      encodeURIComponent(text);
 
     return;
   }
 
+
   alert(
-    "Commande envoyée ! MHD SHOP a bien reçu ta commande."
+    "Commande envoyée avec succès !"
   );
+
 
   goTo("accueil");
 }
 
-// =========================
-// ADMIN
-// =========================
+
+/* =========================================================
+   ADMIN
+   ========================================================= */
 
 async function isAdmin() {
 
   if (!currentUser) return false;
 
-  const { data, error } = await db
-    .from("profiles")
-    .select("role")
-    .eq("id", currentUser.id)
-    .maybeSingle();
 
-  if (error) return false;
+  const result =
+    await supabaseClient
+      .from("profiles")
+      .select("role")
+      .eq("id", currentUser.id)
+      .maybeSingle();
 
-  return data?.role === "admin";
+
+  if (result.error) {
+
+    console.error(
+      "Admin check :",
+      result.error
+    );
+
+    return false;
+  }
+
+
+  return result.data?.role === "admin";
 }
+
 
 async function openAdmin() {
 
   if (!currentUser) {
-    alert("Connecte-toi.");
+
+    alert(
+      "Connecte-toi d'abord."
+    );
+
     goTo("compte");
+
     return;
   }
 
-  const admin = await isAdmin();
+
+  const admin =
+    await isAdmin();
+
 
   if (!admin) {
-    alert("Accès administrateur refusé.");
+
+    alert(
+      "Accès administrateur refusé."
+    );
+
     goTo("accueil");
+
     return;
   }
 
+
   await loadAdminProducts();
+
   await loadAdminOrders();
 }
+
 
 async function addProduct() {
 
   if (!(await isAdmin())) {
-    alert("Accès refusé.");
+
+    alert(
+      "Accès refusé."
+    );
+
     return;
   }
 
-  const name = $("productName")?.value.trim();
-  const category = $("productCategory")?.value.trim();
-  const price = Number($("productPrice")?.value);
-  const image = $("productImage")?.value.trim() || "";
 
-  if (!name || !category || !price) {
-    alert("Remplis tous les champs du produit.");
+  const name =
+    $("productName")?.value.trim();
+
+  const category =
+    $("productCategory")?.value.trim();
+
+  const price =
+    Number(
+      $("productPrice")?.value
+    );
+
+  const image =
+    $("productImage")?.value.trim() || "";
+
+
+  if (!name ||
+      !category ||
+      !price) {
+
+    alert(
+      "Remplis le nom, la catégorie et le prix."
+    );
+
     return;
   }
 
-  const { error } = await db
-    .from("products")
-    .insert({
-      name,
-      category,
-      price,
-      image,
-      available: true
-    });
 
-  if (error) {
-    alert(error.message);
+  const result =
+    await supabaseClient
+      .from("products")
+      .insert({
+        name: name,
+        category: category,
+        price: price,
+        image: image,
+        available: true
+      });
+
+
+  if (result.error) {
+
+    alert(
+      result.error.message
+    );
+
     return;
   }
 
-  alert("Produit ajouté !");
 
-  if ($("productName")) $("productName").value = "";
-  if ($("productCategory")) $("productCategory").value = "";
-  if ($("productPrice")) $("productPrice").value = "";
-  if ($("productImage")) $("productImage").value = "";
+  alert(
+    "Produit ajouté !"
+  );
+
+
+  if ($("productName"))
+    $("productName").value = "";
+
+  if ($("productCategory"))
+    $("productCategory").value = "";
+
+  if ($("productPrice"))
+    $("productPrice").value = "";
+
+  if ($("productImage"))
+    $("productImage").value = "";
+
 
   await loadProducts();
+
   await loadAdminProducts();
 }
 
+
 async function loadAdminProducts() {
 
-  const container = $("adminProducts");
+  const container =
+    $("adminProducts");
 
   if (!container) return;
 
-  const { data, error } = await db
-    .from("products")
-    .select("*")
-    .order("created_at", { ascending: false });
 
-  if (error) {
-    console.error(error);
+  const result =
+    await supabaseClient
+      .from("products")
+      .select("*")
+      .order("created_at", {
+        ascending: false
+      });
+
+
+  if (result.error) {
+
+    console.error(
+      result.error
+    );
+
     return;
   }
 
-  container.innerHTML = (data || []).map((product) => {
 
-    return `
-      <div class="admin-product">
+  const list =
+    result.data || [];
 
-        <div>
-          <strong>${escapeHTML(product.name)}</strong>
-          <small>${money(product.price)}</small>
-        </div>
 
-        <button
-          class="delete-button"
-          data-delete-product="${product.id}">
-          Supprimer
-        </button>
+  if (!list.length) {
 
+    container.innerHTML = `
+      <div class="empty-state">
+        <p>Aucun produit.</p>
       </div>
     `;
 
-  }).join("");
+    return;
+  }
+
+
+  container.innerHTML =
+    list.map(function(product) {
+
+      return `
+        <div class="admin-product">
+
+          <div>
+
+            <strong>
+              ${escapeHTML(product.name)}
+            </strong>
+
+            <small>
+              ${money(product.price)}
+            </small>
+
+          </div>
+
+          <button
+            type="button"
+            class="delete-button"
+            data-delete-product="${product.id}">
+
+            Supprimer
+
+          </button>
+
+        </div>
+      `;
+
+    }).join("");
 }
+
 
 async function deleteProduct(id) {
 
   if (!(await isAdmin())) {
-    alert("Accès refusé.");
+
+    alert(
+      "Accès refusé."
+    );
+
     return;
   }
 
-  if (!confirm("Supprimer ce produit ?")) return;
 
-  const { error } = await db
-    .from("products")
-    .delete()
-    .eq("id", id);
+  const confirmed =
+    window.confirm(
+      "Supprimer ce produit ?"
+    );
 
-  if (error) {
-    alert(error.message);
+
+  if (!confirmed) return;
+
+
+  const result =
+    await supabaseClient
+      .from("products")
+      .delete()
+      .eq("id", id);
+
+
+  if (result.error) {
+
+    alert(
+      result.error.message
+    );
+
     return;
   }
+
 
   await loadProducts();
+
   await loadAdminProducts();
 
-  alert("Produit supprimé.");
+
+  alert(
+    "Produit supprimé."
+  );
 }
+
+
+/* =========================================================
+   COMMANDES ADMIN
+   ========================================================= */
 
 async function loadAdminOrders() {
 
   if (!(await isAdmin())) return;
 
-  const container = $("adminOrders");
+
+  const container =
+    $("adminOrders");
 
   if (!container) return;
 
-  const { data, error } = await db
-    .from("orders")
-    .select("*")
-    .order("created_at", { ascending: false });
 
-  if (error) {
-    console.error(error);
+  const result =
+    await supabaseClient
+      .from("orders")
+      .select("*")
+      .order("created_at", {
+        ascending: false
+      });
+
+
+  if (result.error) {
+
+    console.error(
+      "Commandes :",
+      result.error
+    );
+
     return;
   }
 
-  if (!data?.length) {
+
+  const orders =
+    result.data || [];
+
+
+  if (!orders.length) {
 
     container.innerHTML = `
       <div class="empty-state">
+
         <h3>Aucune commande</h3>
-        <p>Les nouvelles commandes apparaîtront ici.</p>
+
+        <p>
+          Les nouvelles commandes apparaîtront ici.
+        </p>
+
       </div>
     `;
 
     return;
   }
 
-  container.innerHTML = data.map((order) => {
 
-    return `
-      <div class="admin-order">
+  container.innerHTML =
+    orders.map(function(order) {
 
-        <div>
+      return `
+        <div class="admin-order">
+
           <strong>
             ${escapeHTML(order.first_name)}
             ${escapeHTML(order.last_name)}
@@ -1091,113 +1849,167 @@ async function loadAdminOrders() {
           </p>
 
           <p>
-            Statut : ${escapeHTML(order.status)}
+            Statut :
+            ${escapeHTML(order.status)}
           </p>
 
+
+          <div class="order-actions">
+
+            <button
+              type="button"
+              data-order-status="${order.id}"
+              data-status="processing">
+
+              En préparation
+
+            </button>
+
+
+            <button
+              type="button"
+              data-order-status="${order.id}"
+              data-status="completed">
+
+              Terminée
+
+            </button>
+
+          </div>
+
         </div>
+      `;
 
-        <div class="order-actions">
-
-          <button
-            data-order-status="${order.id}"
-            data-status="processing">
-            En préparation
-          </button>
-
-          <button
-            data-order-status="${order.id}"
-            data-status="completed">
-            Terminée
-          </button>
-
-        </div>
-
-      </div>
-    `;
-
-  }).join("");
+    }).join("");
 }
 
-async function updateOrderStatus(id, status) {
+
+async function updateOrderStatus(
+  id,
+  status
+) {
 
   if (!(await isAdmin())) {
-    alert("Accès refusé.");
+
+    alert(
+      "Accès refusé."
+    );
+
     return;
   }
 
-  const { error } = await db
-    .from("orders")
-    .update({ status })
-    .eq("id", id);
 
-  if (error) {
-    alert(error.message);
+  const result =
+    await supabaseClient
+      .from("orders")
+      .update({
+        status: status
+      })
+      .eq("id", id);
+
+
+  if (result.error) {
+
+    alert(
+      result.error.message
+    );
+
     return;
   }
+
 
   await loadAdminOrders();
 }
 
-// =========================
-// MHD IA
-// =========================
+
+/* =========================================================
+   MHD IA
+   ========================================================= */
 
 function toggleIA() {
 
-  const box = $("mhdIABox");
+  const box =
+    $("mhdIABox");
 
   if (!box) return;
 
   box.classList.toggle("show");
 }
 
+
 function closeIA() {
 
-  const box = $("mhdIABox");
+  const box =
+    $("mhdIABox");
 
   if (!box) return;
 
   box.classList.remove("show");
 }
 
-// =========================
-// INITIALISATION
-// =========================
 
-async function init() {
+/* =========================================================
+   RECHERCHE
+   ========================================================= */
 
-  const { data } = await db.auth.getSession();
+function setupSearch() {
 
-  currentUser = data?.session?.user || null;
+  const search =
+    $("search");
 
-  updateCartCount();
+  if (!search) return;
 
-  await loadProducts();
+
+  search.addEventListener(
+    "input",
+    function() {
+
+      renderProducts();
+
+    }
+  );
+}
+
+
+/* =========================================================
+   SESSION
+   ========================================================= */
+
+async function setupAuth() {
+
+  const sessionResult =
+    await supabaseClient.auth.getSession();
+
+
+  currentUser =
+    sessionResult.data?.session?.user ||
+    null;
+
 
   if (currentUser) {
     await loadProfile();
   }
 
-  const search = $("search");
 
-  if (search) {
-    search.addEventListener("input", renderProducts);
-  }
+  supabaseClient.auth.onAuthStateChange(
+    function(_event, session) {
 
-  // Auth automatique après retour Google/Apple
-  db.auth.onAuthStateChange(async (_event, session) => {
+      currentUser =
+        session?.user || null;
 
-    currentUser = session?.user || null;
-
-    if (currentUser) {
-      await loadProfile();
     }
+  );
+}
 
-  });
 
-  // Commandes en temps réel pour l'admin
-  db
-    .channel("mhd-orders")
+/* =========================================================
+   TEMPS RÉEL COMMANDES
+   ========================================================= */
+
+function setupRealtime() {
+
+  supabaseClient
+    .channel("mhd-shop-orders")
     .on(
       "postgres_changes",
       {
@@ -1205,10 +2017,10 @@ async function init() {
         schema: "public",
         table: "orders"
       },
-      async () => {
+      function() {
 
-        if (currentUser && await isAdmin()) {
-          await loadAdminOrders();
+        if (currentUser) {
+          loadAdminOrders();
         }
 
       }
@@ -1216,4 +2028,54 @@ async function init() {
     .subscribe();
 }
 
-document.addEventListener("DOMContentLoaded", init);
+
+/* =========================================================
+   INITIALISATION
+   ========================================================= */
+
+async function init() {
+
+  console.log(
+    "🔥 MHD SHOP V7 chargé"
+  );
+
+
+  updateCartCount();
+
+  setupSearch();
+
+  await setupAuth();
+
+  await loadProducts();
+
+  renderCart();
+
+  setupRealtime();
+
+
+  /*
+    On force l'accueil au démarrage.
+  */
+
+  goTo("accueil");
+}
+
+
+/* =========================================================
+   LANCEMENT
+   ========================================================= */
+
+if (
+  document.readyState === "loading"
+) {
+
+  document.addEventListener(
+    "DOMContentLoaded",
+    init
+  );
+
+} else {
+
+  init();
+
+}
