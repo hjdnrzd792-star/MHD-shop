@@ -4,16 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>𝓜𝓗𝓓𝓢𝓗𝓞𝓟</title>
-
-<link rel="stylesheet" href="style.css?v=2">
+<link rel="stylesheet" href="style.css?v=3">
 </head>
 
 <body>
 
 <header>
-  <img class="site-logo" src="logo-mhd-shop.png" alt="MHD SHOP">
+  <div class="brand">
+    <img class="site-logo" src="logo-mhd-shop.png" alt="MHD SHOP">
+    <div class="brand-name">𝓜𝓗𝓓𝓢𝓗𝓞𝓟</div>
+  </div>
 
-  <button data-go="panier" aria-label="Panier">
+  <button data-go="panier" class="cart-button" aria-label="Panier">
     🛒 <span id="cartCount">0</span>
   </button>
 </header>
@@ -23,7 +25,6 @@
 <section id="accueil" class="page active">
 
   <div class="hero">
-
     <small>MHD SHOP</small>
 
     <h1>Gaming & digital.</h1>
@@ -36,7 +37,6 @@
     <button class="primary" data-go="boutique">
       Voir la boutique
     </button>
-
   </div>
 
   <h2>Produits populaires</h2>
@@ -84,21 +84,16 @@
 <section id="admin" class="page">
 
   <div class="head">
-
     <h1>⚙️ Administration</h1>
 
     <button id="adminExit">
       Fermer
     </button>
-
   </div>
 
-
   <div class="notice">
-
     Espace réservé au compte administrateur.
     Les autorisations sont vérifiées avec Supabase.
-
   </div>
 
 
@@ -108,10 +103,7 @@
       Ajouter un produit
     </h2>
 
-    <input
-      type="hidden"
-      id="editId"
-    >
+    <input type="hidden" id="editId">
 
 
     <label for="pName">
@@ -147,13 +139,18 @@
 
 
     <label for="pImage">
-      Image ou emoji
+      Photo du produit
     </label>
 
     <input
       id="pImage"
-      placeholder="🎮 ou URL de l'image"
+      type="file"
+      accept="image/*"
     >
+
+    <div id="imagePreview" class="image-preview">
+      Aucune photo sélectionnée
+    </div>
 
 
     <label for="pAvailable">
@@ -180,7 +177,6 @@
       Enregistrer
     </button>
 
-
     <button id="cancelEdit">
       Annuler
     </button>
@@ -204,29 +200,22 @@
     <span>Accueil</span>
   </button>
 
-
   <button data-go="boutique">
     🛍️
     <span>Boutique</span>
   </button>
-
 
   <button data-go="panier">
     🛒
     <span>Panier</span>
   </button>
 
-
   <button data-go="compte">
     👤
     <span>Compte</span>
   </button>
 
-
-  <button
-    id="adminOpen"
-    data-go="admin"
-  >
+  <button id="adminOpen" data-go="admin">
     ⚙️
     <span>Admin</span>
   </button>
@@ -235,8 +224,7 @@
 
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-<script src="script.js"></script>
+<script src="script.js?v=3"></script>
 
 </body>
 </html>
