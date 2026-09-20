@@ -4,113 +4,353 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#05070d">
-<title>𝓜𝓗𝓓𝓢𝓗𝓞𝓟 — Gaming & Digital</title>
-<link rel="icon" href="logo-mhd-shop.png">
-<link rel="stylesheet" href="style.css?v=81">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-</head>
-<body>
-<div class="ambient blue"></div><div class="ambient red"></div>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>𝓜𝓗𝓓𝓢𝓗𝓞𝓟</title>
 
-<header class="topbar glass">
-  <button class="brand" data-go="home">
-    <img src="logo-mhd-shop.png" alt="MHD SHOP">
-    <span><b>𝓜𝓗𝓓𝓢𝓗𝓞𝓟</b><small>GAMING & DIGITAL</small></span>
-  </button>
-  <div class="top-actions">
-    <button class="icon-btn" data-go="account">♙</button>
-    <button class="icon-btn cart-btn" data-go="cart">🛒<i id="cartCount">0</i></button>
+<link rel="stylesheet" href="style.css?v=6">
+</head>
+
+<body>
+
+<div class="ambient ambient-blue"></div>
+<div class="ambient ambient-red"></div>
+
+<header>
+  <div class="brand">
+    <img class="site-logo" src="logo-mhd-shop.png" alt="MHD SHOP">
+    <div>
+      <div class="brand-name">𝓜𝓗𝓓𝓢𝓗𝓞𝓟</div>
+      <div class="brand-sub">GAMING • DIGITAL</div>
+    </div>
   </div>
+
+  <button data-go="panier" class="cart-button" aria-label="Panier">
+    🛒 <span id="cartCount">0</span>
+  </button>
 </header>
 
 <main>
-<section id="home" class="page active">
+
+<section id="accueil" class="page active">
+
   <div class="hero glass">
-    <div class="hero-text">
-      <span class="eyebrow">⚡ GAMING • DIGITAL • PREMIUM</span>
-      <h1>𝓜𝓗𝓓𝓢𝓗𝓞𝓟</h1>
-      <h2>Ton univers gaming & digital.</h2>
-      <p>Découvre les produits disponibles, ajoute-les au panier et commande facilement.</p>
-      <div class="actions"><button class="btn primary" data-go="shop">Voir la boutique</button><button class="btn glass-btn" data-go="cart">Mon panier</button></div>
+    <small>⚡ MHD SHOP</small>
+    <h1>Gaming.<br><span>Digital.</span><br>Premium.</h1>
+    <p>Découvre nos produits et services autorisés dans une expérience gaming moderne.</p>
+
+    <div class="hero-actions">
+      <button class="primary" data-go="boutique">🛍️ Voir la boutique</button>
+      <button class="ghost" data-go="compte">👤 Mon compte</button>
     </div>
-    <div class="hero-logo"><div class="ring"></div><img src="logo-mhd-shop.png" alt=""></div>
   </div>
-  <div class="section-title"><div><span class="eyebrow">SÉLECTION</span><h2>Produits</h2></div><button class="link-btn" data-go="shop">Tout voir →</button></div>
-  <div id="featured" class="products"></div>
-</section>
 
-<section id="shop" class="page">
-  <div class="title"><span class="eyebrow">MHD SHOP</span><h1>Boutique</h1><p>Recherche un produit ou choisis une catégorie.</p></div>
-  <div class="tools glass"><input id="search" placeholder="🔎 Rechercher..."><div id="cats" class="chips"></div></div>
-  <div id="products" class="products"></div>
-</section>
-
-<section id="cart" class="page">
-  <div class="title"><span class="eyebrow">TON ESPACE</span><h1>Panier</h1></div>
-  <div id="cartItems"></div>
-  <div class="summary glass"><div><span>Total</span><strong id="cartTotal">0 FCFA</strong></div><button class="btn primary wide" data-go="checkout">Passer la commande</button></div>
-</section>
-
-<section id="checkout" class="page">
-  <div class="title"><span class="eyebrow">FINALISATION</span><h1>Commander</h1></div>
-  <form id="checkoutForm" class="form glass">
-    <div class="grid2"><label>Prénom<input id="firstName" required></label><label>Nom<input id="lastName" required></label></div>
-    <label>Téléphone<input id="phone" type="tel" required placeholder="+221 78 000 00 00"></label>
-    <div class="verify"><button type="button" id="sendOtp" class="btn glass-btn">Vérifier le numéro</button><input id="otp" inputmode="numeric" maxlength="6" placeholder="Code SMS" hidden><button type="button" id="verifyOtp" class="btn glass-btn" hidden>Confirmer</button><small id="phoneInfo">La vérification SMS nécessite un fournisseur SMS activé dans Supabase.</small></div>
-    <div class="methods"><button type="button" class="method active" data-method="site">🛍️ Sur le site</button><button type="button" class="method" data-method="whatsapp">💬 WhatsApp</button></div>
-    <div class="total-line"><span>Total</span><strong id="checkoutTotal">0 FCFA</strong></div>
-    <button class="btn primary wide">Confirmer la commande</button>
-  </form>
-</section>
-
-<section id="account" class="page">
-  <div class="title"><span class="eyebrow">MON ESPACE</span><h1>Compte</h1></div>
-  <div id="loginBox" class="form glass">
-    <h2>Connexion</h2><p class="muted">Connecte-toi pour sauvegarder tes informations et tes commandes.</p>
-    <label>Email<input id="email" type="email"></label><label>Mot de passe<input id="password" type="password"></label>
-    <div class="actions"><button id="login" class="btn primary">Se connecter</button><button id="signup" class="btn glass-btn">Créer un compte</button></div>
-    <div class="or"><span>ou</span></div>
-    <button id="google" class="btn social">G&nbsp; Continuer avec Google</button>
-    <button id="apple" class="btn social">&nbsp; Continuer avec Apple</button>
-    <p id="authInfo" class="status"></p>
+  <div class="section-heading">
+    <div>
+      <small>À DÉCOUVRIR</small>
+      <h2>Produits populaires</h2>
+    </div>
+    <button class="text-button" data-go="boutique">Tout voir →</button>
   </div>
-  <div id="profileBox" class="form glass hidden">
-    <div class="profile"><div class="avatar">M</div><div><h2 id="accountEmail">Compte</h2><span id="role" class="badge">CLIENT</span></div></div>
-    <div class="grid2"><label>Prénom<input id="profileFirst"></label><label>Nom<input id="profileLast"></label></div>
-    <label>Téléphone<input id="profilePhone"></label>
-    <button id="saveProfile" class="btn primary wide">Enregistrer</button>
-    <button id="ordersBtn" class="btn glass-btn wide">Mes commandes</button>
-    <button id="adminBtn" class="btn admin wide hidden">⚙️ Administration</button>
-    <button id="logout" class="btn danger wide">Se déconnecter</button>
-    <p id="profileInfo" class="status"></p>
+
+  <div id="homeProducts" class="grid"></div>
+
+  <div class="feature-grid">
+    <article class="glass">
+      <b>🚀 Commande simple</b>
+      <p>Site ou WhatsApp, au choix.</p>
+    </article>
+
+    <article class="glass">
+      <b>🔐 Compte sécurisé</b>
+      <p>Ton numéro vérifié reste enregistré.</p>
+    </article>
+
+    <article class="glass">
+      <b>💬 Support vendeur</b>
+      <p>+221 78 748 81 99</p>
+    </article>
   </div>
-  <div id="orders"></div>
+
+</section>
+
+<section id="boutique" class="page">
+
+  <div class="page-title glass">
+    <small>BOUTIQUE</small>
+    <h1>Choisis ton produit</h1>
+    <p>Recherche et filtre les produits.</p>
+  </div>
+
+  <input id="search" class="glass-input" type="search"
+    placeholder="🔎 Rechercher un produit...">
+
+  <div id="categories" class="chips"></div>
+  <div id="products" class="grid"></div>
+
+</section>
+
+<section id="panier" class="page">
+
+  <div class="page-title glass">
+    <small>TON PANIER</small>
+    <h1>Mon panier</h1>
+  </div>
+
+  <div id="cart"></div>
+
+</section>
+
+<section id="commande" class="page">
+
+  <div class="page-title glass">
+    <small>COMMANDE</small>
+    <h1>Finaliser ma commande</h1>
+    <p>Ces informations sont obligatoires.</p>
+  </div>
+
+  <div class="panel glass">
+
+    <div class="form-row">
+
+      <div>
+        <label for="orderFirstName">Prénom *</label>
+        <input id="orderFirstName" autocomplete="given-name" placeholder="Ton prénom">
+      </div>
+
+      <div>
+        <label for="orderLastName">Nom *</label>
+        <input id="orderLastName" autocomplete="family-name" placeholder="Ton nom">
+      </div>
+
+    </div>
+
+    <label for="orderPhone">Numéro de téléphone *</label>
+
+    <input
+      id="orderPhone"
+      type="tel"
+      inputmode="tel"
+      autocomplete="tel"
+      placeholder="+221 77 000 00 00"
+    >
+
+    <div id="phoneStatus" class="status-box">
+      ⚠️ Ton numéro doit être vérifié avant la commande.
+    </div>
+
+    <button id="sendOtp" class="secondary full">
+      📲 Vérifier mon numéro
+    </button>
+
+    <div id="otpArea" class="hidden">
+
+      <label for="otpCode">Code reçu par SMS</label>
+
+      <input
+        id="otpCode"
+        inputmode="numeric"
+        maxlength="6"
+        placeholder="Code à 6 chiffres"
+      >
+
+      <button id="verifyOtp" class="primary full">
+        ✅ Vérifier le code
+      </button>
+
+    </div>
+
+    <div class="order-choice">
+
+      <h3>Comment veux-tu commander ?</h3>
+
+      <button id="orderOnSite" class="choice-card glass">
+        🛍️
+        <div>
+          <b>Commander sur le site</b>
+          <small>La commande arrive dans Admin.</small>
+        </div>
+      </button>
+
+      <button id="orderOnWhatsApp" class="choice-card glass">
+        💬
+        <div>
+          <b>Commander sur WhatsApp</b>
+          <small>Le message est préparé automatiquement.</small>
+        </div>
+      </button>
+
+    </div>
+
+  </div>
+
+</section>
+
+<section id="compte" class="page">
+
+  <div class="page-title glass">
+    <small>ESPACE CLIENT</small>
+    <h1>Mon compte</h1>
+    <p>Profil, téléphone, support et apparence.</p>
+  </div>
+
+  <div id="authPanel" class="panel glass"></div>
+
 </section>
 
 <section id="admin" class="page">
-  <div class="title"><span class="eyebrow">OWNER AREA</span><h1>Administration</h1></div>
-  <div id="adminMsg" class="glass form">Vérification...</div>
-  <div id="adminArea" class="hidden">
-    <div class="tabs"><button class="tab active" data-tab="productsTab">Produits</button><button class="tab" data-tab="ordersTab">Commandes</button></div>
-    <div id="productsTab" class="form glass">
-      <h2>Ajouter un produit</h2>
-      <form id="productForm"><label>Nom<input id="pName" required></label><div class="grid2"><label>Catégorie<input id="pCat" required></label><label>Prix FCFA<input id="pPrice" type="number" min="1" required></label></div><label>Image<input id="pImage" placeholder="URL ou logo-mhd-shop.png"></label><label class="check"><input id="pAvailable" type="checkbox" checked> Disponible</label><button class="btn primary wide">Ajouter</button></form>
-      <div id="adminProducts"></div>
+
+  <div class="head glass">
+
+    <div>
+      <small>ESPACE PRIVÉ</small>
+      <h1>⚙️ Administration</h1>
     </div>
-    <div id="ordersTab" class="form glass hidden"><h2>Commandes</h2><button id="refreshOrders" class="btn glass-btn">Actualiser</button><div id="adminOrders"></div></div>
+
+    <button id="adminExit">Fermer</button>
+
   </div>
+
+  <div class="notice glass">
+    🔐 Espace réservé au compte administrateur.
+  </div>
+
+  <div id="adminOrderAlert" class="admin-alert hidden"></div>
+
+  <div class="admin-tabs glass">
+
+    <button class="admin-tab active" data-admin-tab="products">
+      📦 Produits
+    </button>
+
+    <button class="admin-tab" data-admin-tab="orders">
+      🛍️ Commandes <span id="orderBadge">0</span>
+    </button>
+
+  </div>
+
+  <div id="adminProductsTab">
+
+    <div class="panel glass">
+
+      <h2 id="formTitle">Ajouter un produit</h2>
+
+      <input type="hidden" id="editId">
+
+      <label for="pName">Nom du produit</label>
+      <input id="pName" placeholder="Nom du produit">
+
+      <label for="pCategory">Catégorie</label>
+      <input id="pCategory" placeholder="Gaming">
+
+      <label for="pPrice">Prix FCFA</label>
+      <input id="pPrice" type="number" min="1" placeholder="5000">
+
+      <label for="pImage">Photo du produit</label>
+      <input id="pImage" type="file" accept="image/*">
+
+      <div id="imagePreview" class="image-preview">
+        Aucune photo sélectionnée
+      </div>
+
+      <label for="pAvailable">Disponibilité</label>
+
+      <select id="pAvailable">
+        <option value="true">Disponible</option>
+        <option value="false">Indisponible</option>
+      </select>
+
+      <button class="primary full" id="saveProduct">
+        Enregistrer
+      </button>
+
+      <button id="cancelEdit" class="full">
+        Annuler
+      </button>
+
+    </div>
+
+    <h2>Mes produits</h2>
+
+    <div id="adminProducts"></div>
+
+  </div>
+
+  <div id="adminOrdersTab" class="hidden">
+
+    <div id="adminOrders"></div>
+
+  </div>
+
 </section>
+
 </main>
 
-<button id="aiButton" class="ai">✦</button>
-<div id="aiBox" class="ai-box glass hidden"><div class="ai-head"><b>✦ MHD IA</b><button id="closeAI">×</button></div><div id="aiMessages" class="messages"><div class="msg bot">Salut 👋 Je peux t'aider avec la boutique, le panier, les commandes et WhatsApp.</div></div><div class="ai-input"><input id="aiInput" placeholder="Écris ton message..."><button id="aiSend">➤</button></div></div>
+<!-- MHD IA -->
 
-<nav class="bottom glass">
-<button class="nav active" data-go="home">⌂<small>Accueil</small></button>
-<button class="nav" data-go="shop">◈<small>Boutique</small></button>
-<button class="nav" data-go="cart">🛒<i id="navCount">0</i><small>Panier</small></button>
-<button class="nav" data-go="account">♙<small>Compte</small></button>
+<button id="aiFloat" class="ai-float" aria-label="Ouvrir MHD IA">
+  🤖 <b>MHD IA</b>
+</button>
+
+<div id="aiBox" class="ai-box hidden">
+
+  <div class="ai-head">
+    <b>🤖 MHD IA</b>
+    <button id="aiClose">×</button>
+  </div>
+
+  <div id="aiMessages" class="ai-messages">
+    <div class="ai-msg bot">
+      Salut 👋 Je peux aider pour les produits, les commandes et le support.
+    </div>
+  </div>
+
+  <div class="ai-quick">
+    <button data-ai="produits">🛍️ Produits</button>
+    <button data-ai="commande">📦 Commander</button>
+    <button data-ai="support">💬 Support</button>
+  </div>
+
+  <div class="ai-input">
+    <input id="aiInput" placeholder="Écris ta question...">
+    <button id="aiSend">➤</button>
+  </div>
+
+</div>
+
+<!-- NAVIGATION -->
+
+<nav class="liquid-nav">
+
+  <button data-go="accueil">
+    🏠
+    <span>Accueil</span>
+  </button>
+
+  <button data-go="boutique">
+    🛍️
+    <span>Boutique</span>
+  </button>
+
+  <button data-go="panier">
+    🛒
+    <span>Panier</span>
+  </button>
+
+  <button data-go="compte">
+    👤
+    <span>Compte</span>
+  </button>
+
+  <button id="adminOpen" data-go="admin">
+    ⚙️
+    <span>Admin</span>
+  </button>
+
 </nav>
-<div id="toast" class="toast"></div>
-<script src="script.js?v=81"></script>
-</body></html>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="script.js?v=6"></script>
+
+</body>
+</html>
