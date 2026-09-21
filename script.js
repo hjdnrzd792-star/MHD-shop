@@ -139,7 +139,6 @@ async function account(){
     if($("adminBtn"))$("adminBtn").classList.toggle("hidden",p.role!=="admin");
   }
 
-  renderThemeSetting();
 }
 
 async function auth(mode){
@@ -344,51 +343,6 @@ async function loadAdminOrders(){
 }
 
 /* =========================
-   THÈME CLAIR / SOMBRE
-   ========================= */
-
-function applyTheme(theme){
-  document.body.classList.toggle("light-theme",theme==="light");
-  localStorage.setItem("mhd_theme",theme);
-}
-
-function loadTheme(){
-  applyTheme(localStorage.getItem("mhd_theme")||"dark");
-}
-
-function renderThemeSetting(){
-  const profileBox=$("profileBox");
-  if(!profileBox||$("themeSetting"))return;
-
-  const box=document.createElement("div");
-  box.id="themeSetting";
-  box.className="theme-setting glass";
-
-  box.innerHTML=`
-    <div>
-      <b>🎨 Apparence</b>
-      <small>Choisis le thème de MHD SHOP</small>
-    </div>
-    <div class="theme-buttons">
-      <button id="themeDark" class="theme-button" type="button">🌙 Sombre</button>
-      <button id="themeLight" class="theme-button" type="button">☀️ Clair</button>
-    </div>
-  `;
-
-  profileBox.appendChild(box);
-
-  $("themeDark").onclick=()=>{
-    applyTheme("dark");
-    toast("🌙 Mode sombre activé");
-  };
-
-  $("themeLight").onclick=()=>{
-    applyTheme("light");
-    toast("☀️ Mode clair activé");
-  };
-}
-
-/* =========================
    CLICS
    ========================= */
 
@@ -548,7 +502,6 @@ document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
    ========================= */
 
 (async()=>{
-  loadTheme();
   count();
 
   try{
