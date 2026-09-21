@@ -7,90 +7,350 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>𝓜𝓗𝓓𝓢𝓗𝓞𝓟</title>
-<link rel="stylesheet" href="style.css?v=7">
+
+<link rel="stylesheet" href="style.css?v=6">
 </head>
+
 <body>
-<header class="topbar glass">
+
+<div class="ambient ambient-blue"></div>
+<div class="ambient ambient-red"></div>
+
+<header>
   <div class="brand">
-    <img src="logo-mhd-shop.png" alt="MHD SHOP">
-    <div><b>𝓜𝓗𝓓𝓢𝓗𝓞𝓟</b><small>GAMING • DIGITAL</small></div>
+    <img class="site-logo" src="logo-mhd-shop.png" alt="MHD SHOP">
+    <div>
+      <div class="brand-name">𝓜𝓗𝓓𝓢𝓗𝓞𝓟</div>
+      <div class="brand-sub">GAMING • DIGITAL</div>
+    </div>
   </div>
-  <div class="top-actions">
-    <button class="icon-btn" data-go="cart" aria-label="Panier">🛒<i id="cartCount">0</i></button>
-  </div>
+
+  <button data-go="panier" class="cart-button" aria-label="Panier">
+    🛒 <span id="cartCount">0</span>
+  </button>
 </header>
+
 <main>
-<section id="home" class="page active">
+
+<section id="accueil" class="page active">
+
   <div class="hero glass">
-    <div class="hero-text">
-      <div class="eyebrow">⚡ MHD SHOP</div>
-      <h1>Gaming.</h1><h2>Digital.</h2><h1>Premium.</h1>
-      <p>Découvre nos produits et services autorisés dans une expérience gaming moderne.</p>
-      <div class="actions">
-        <button class="btn primary" data-go="shop">🛍️ Voir la boutique</button>
-        <button class="btn" data-go="account">👤 Mon compte</button>
+    <small>⚡ MHD SHOP</small>
+    <h1>Gaming.<br><span>Digital.</span><br>Premium.</h1>
+    <p>Découvre nos produits et services autorisés dans une expérience gaming moderne.</p>
+
+    <div class="hero-actions">
+      <button class="primary" data-go="boutique">🛍️ Voir la boutique</button>
+      <button class="ghost" data-go="compte">👤 Mon compte</button>
+    </div>
+  </div>
+
+  <div class="section-heading">
+    <div>
+      <small>À DÉCOUVRIR</small>
+      <h2>Produits populaires</h2>
+    </div>
+    <button class="text-button" data-go="boutique">Tout voir →</button>
+  </div>
+
+  <div id="homeProducts" class="grid"></div>
+
+  <div class="feature-grid">
+    <article class="glass">
+      <b>🚀 Commande simple</b>
+      <p>Site ou WhatsApp, au choix.</p>
+    </article>
+
+    <article class="glass">
+      <b>🔐 Compte sécurisé</b>
+      <p>Ton numéro vérifié reste enregistré.</p>
+    </article>
+
+    <article class="glass">
+      <b>💬 Support vendeur</b>
+      <p>+221 78 748 81 99</p>
+    </article>
+  </div>
+
+</section>
+
+<section id="boutique" class="page">
+
+  <div class="page-title glass">
+    <small>BOUTIQUE</small>
+    <h1>Choisis ton produit</h1>
+    <p>Recherche et filtre les produits.</p>
+  </div>
+
+  <input id="search" class="glass-input" type="search"
+    placeholder="🔎 Rechercher un produit...">
+
+  <div id="categories" class="chips"></div>
+  <div id="products" class="grid"></div>
+
+</section>
+
+<section id="panier" class="page">
+
+  <div class="page-title glass">
+    <small>TON PANIER</small>
+    <h1>Mon panier</h1>
+  </div>
+
+  <div id="cart"></div>
+
+</section>
+
+<section id="commande" class="page">
+
+  <div class="page-title glass">
+    <small>COMMANDE</small>
+    <h1>Finaliser ma commande</h1>
+    <p>Ces informations sont obligatoires.</p>
+  </div>
+
+  <div class="panel glass">
+
+    <div class="form-row">
+
+      <div>
+        <label for="orderFirstName">Prénom *</label>
+        <input id="orderFirstName" autocomplete="given-name" placeholder="Ton prénom">
       </div>
+
+      <div>
+        <label for="orderLastName">Nom *</label>
+        <input id="orderLastName" autocomplete="family-name" placeholder="Ton nom">
+      </div>
+
     </div>
-    <div class="hero-logo"><div class="ring"></div><img src="logo-mhd-shop.png" alt="MHD SHOP"></div>
-  </div>
-  <div class="section-title"><div><small>À DÉCOUVRIR</small><h2>Produits populaires</h2></div><button class="link-btn" data-go="shop">Tout voir →</button></div>
-  <div id="featured" class="products"></div>
-</section>
-<section id="shop" class="page">
-  <div class="title"><small>BOUTIQUE</small><h1>Choisis ton produit</h1><p>Recherche et filtre les produits.</p></div>
-  <div class="tools glass"><input id="search" type="search" placeholder="🔎 Rechercher un produit..."><div id="cats" class="chips"></div></div>
-  <div id="products" class="products"></div>
-</section>
-<section id="cart" class="page">
-  <div class="title"><small>TON PANIER</small><h1>Mon panier</h1></div>
-  <div id="cartItems"></div>
-  <div class="summary glass"><div><span>Total</span><strong id="cartTotal">0 FCFA</strong></div><button class="btn primary wide" data-go="checkout">Continuer la commande</button></div>
-</section>
-<section id="checkout" class="page">
-  <div class="title"><small>COMMANDE</small><h1>Finaliser ma commande</h1><p>Remplis les informations nécessaires.</p></div>
-  <form id="checkoutForm" class="form glass">
-    <div class="grid2">
-      <label>Prénom<input id="firstName" autocomplete="given-name" required></label>
-      <label>Nom<input id="lastName" autocomplete="family-name" required></label>
+
+    <label for="orderPhone">Numéro de téléphone *</label>
+
+    <input
+      id="orderPhone"
+      type="tel"
+      inputmode="tel"
+      autocomplete="tel"
+      placeholder="+221 77 000 00 00"
+    >
+
+    <div id="phoneStatus" class="status-box">
+      ⚠️ Ton numéro doit être vérifié avant la commande.
     </div>
-    <label>Téléphone<input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+221 77 000 00 00" required></label>
-    <div class="verify"><b>📲 Vérification du numéro</b><small id="phoneInfo">Ton numéro doit être vérifié avant la commande.</small><button type="button" id="sendOtp" class="btn wide" style="margin-top:10px">Envoyer le code</button><input id="otp" class="hidden" inputmode="numeric" maxlength="6" placeholder="Code reçu par SMS" style="margin-top:10px"><button type="button" id="verifyOtp" class="btn primary wide hidden" style="margin-top:10px">Vérifier le code</button></div>
-    <div class="methods"><button type="button" class="method active" data-method="site">🛍️ Sur le site</button><button type="button" class="method" data-method="whatsapp">💬 WhatsApp</button></div>
-    <div class="total-line"><span>Total</span><strong id="checkoutTotal">0 FCFA</strong></div>
-    <button class="btn primary wide" type="submit">Confirmer la commande</button>
-  </form>
-</section>
-<section id="account" class="page">
-  <div class="title"><small>ESPACE CLIENT</small><h1>Mon compte</h1><p>Profil, commandes et support.</p></div>
-  <div id="loginBox" class="form glass">
-    <h2>Connexion</h2><input id="email" type="email" placeholder="Email" autocomplete="email"><input id="password" type="password" placeholder="Mot de passe" autocomplete="current-password" style="margin-top:9px"><div class="actions"><button id="login" class="btn primary">Se connecter</button><button id="signup" class="btn">Créer un compte</button></div><div class="or">ou</div><button id="google" class="btn social">Continuer avec Google</button><button id="apple" class="btn social">Continuer avec Apple</button><p id="authInfo" class="status"></p>
+
+    <button id="sendOtp" class="secondary full">
+      📲 Vérifier mon numéro
+    </button>
+
+    <div id="otpArea" class="hidden">
+
+      <label for="otpCode">Code reçu par SMS</label>
+
+      <input
+        id="otpCode"
+        inputmode="numeric"
+        maxlength="6"
+        placeholder="Code à 6 chiffres"
+      >
+
+      <button id="verifyOtp" class="primary full">
+        ✅ Vérifier le code
+      </button>
+
+    </div>
+
+    <div class="order-choice">
+
+      <h3>Comment veux-tu commander ?</h3>
+
+      <button id="orderOnSite" class="choice-card glass">
+        🛍️
+        <div>
+          <b>Commander sur le site</b>
+          <small>La commande arrive dans Admin.</small>
+        </div>
+      </button>
+
+      <button id="orderOnWhatsApp" class="choice-card glass">
+        💬
+        <div>
+          <b>Commander sur WhatsApp</b>
+          <small>Le message est préparé automatiquement.</small>
+        </div>
+      </button>
+
+    </div>
+
   </div>
-  <div id="profileBox" class="form glass hidden">
-    <div class="profile"><div class="avatar">M</div><div><h2>Mon profil</h2><small id="accountEmail"></small></div><span id="role" class="badge">CLIENT</span></div>
-    <div class="grid2"><label>Prénom<input id="profileFirst"></label><label>Nom<input id="profileLast"></label></div><label>Téléphone<input id="profilePhone" type="tel"></label><button id="saveProfile" class="btn primary wide">Enregistrer</button><p id="profileInfo" class="status"></p>
-    <div class="actions"><button id="ordersBtn" class="btn">📦 Mes commandes</button><button id="adminBtn" class="btn admin hidden">⚙️ Admin</button><button id="logout" class="btn danger">Déconnexion</button></div><div id="orders"></div>
-  </div>
+
 </section>
+
+<section id="compte" class="page">
+
+  <div class="page-title glass">
+    <small>ESPACE CLIENT</small>
+    <h1>Mon compte</h1>
+    <p>Profil, téléphone, support et apparence.</p>
+  </div>
+
+  <div id="authPanel" class="panel glass"></div>
+
+</section>
+
 <section id="admin" class="page">
-  <div class="title"><small>ESPACE PRIVÉ</small><h1>⚙️ Administration</h1><p id="adminMsg" class="muted"></p></div>
-  <div id="adminArea" class="hidden">
-    <div class="tabs"><button class="tab active" data-tab="productsTab">📦 Produits</button><button class="tab" data-tab="ordersTab">🛍️ Commandes</button></div>
-    <div id="productsTab"><form id="productForm" class="form glass"><h2>Ajouter un produit</h2><label>Nom<input id="pName" required></label><label>Catégorie<input id="pCat" required></label><label>Prix FCFA<input id="pPrice" type="number" min="1" required></label><label>Image (URL)<input id="pImage" placeholder="https://..."></label><label class="check"><input id="pAvailable" type="checkbox" checked> Disponible</label><button class="btn primary wide" type="submit">Ajouter</button></form><div class="section-title"><h2>Mes produits</h2></div><div id="adminProducts"></div></div>
-    <div id="ordersTab" class="hidden"><button id="refreshOrders" class="btn glass-btn">Actualiser</button><div id="adminOrders"></div></div>
+
+  <div class="head glass">
+
+    <div>
+      <small>ESPACE PRIVÉ</small>
+      <h1>⚙️ Administration</h1>
+    </div>
+
+    <button id="adminExit">Fermer</button>
+
   </div>
+
+  <div class="notice glass">
+    🔐 Espace réservé au compte administrateur.
+  </div>
+
+  <div id="adminOrderAlert" class="admin-alert hidden"></div>
+
+  <div class="admin-tabs glass">
+
+    <button class="admin-tab active" data-admin-tab="products">
+      📦 Produits
+    </button>
+
+    <button class="admin-tab" data-admin-tab="orders">
+      🛍️ Commandes <span id="orderBadge">0</span>
+    </button>
+
+  </div>
+
+  <div id="adminProductsTab">
+
+    <div class="panel glass">
+
+      <h2 id="formTitle">Ajouter un produit</h2>
+
+      <input type="hidden" id="editId">
+
+      <label for="pName">Nom du produit</label>
+      <input id="pName" placeholder="Nom du produit">
+
+      <label for="pCategory">Catégorie</label>
+      <input id="pCategory" placeholder="Gaming">
+
+      <label for="pPrice">Prix FCFA</label>
+      <input id="pPrice" type="number" min="1" placeholder="5000">
+
+      <label for="pImage">Photo du produit</label>
+      <input id="pImage" type="file" accept="image/*">
+
+      <div id="imagePreview" class="image-preview">
+        Aucune photo sélectionnée
+      </div>
+
+      <label for="pAvailable">Disponibilité</label>
+
+      <select id="pAvailable">
+        <option value="true">Disponible</option>
+        <option value="false">Indisponible</option>
+      </select>
+
+      <button class="primary full" id="saveProduct">
+        Enregistrer
+      </button>
+
+      <button id="cancelEdit" class="full">
+        Annuler
+      </button>
+
+    </div>
+
+    <h2>Mes produits</h2>
+
+    <div id="adminProducts"></div>
+
+  </div>
+
+  <div id="adminOrdersTab" class="hidden">
+
+    <div id="adminOrders"></div>
+
+  </div>
+
 </section>
+
 </main>
-<button id="aiButton" class="ai" aria-label="Ouvrir MHD IA">🤖</button>
-<div id="aiBox" class="ai-box glass hidden"><div class="ai-head"><b>🤖 MHD IA</b><button id="closeAI">×</button></div><div id="aiMessages" class="messages"><div class="msg bot">Salut 👋 Je peux aider pour les produits, les commandes et le support.</div></div><div class="ai-input"><input id="aiInput" placeholder="Écris ta question..."><button id="aiSend">➤</button></div></div>
-<nav class="bottom glass">
-  <button class="nav active" data-go="home">🏠<small>Accueil</small></button>
-  <button class="nav" data-go="shop">🛍️<small>Boutique</small></button>
-  <button class="nav" data-go="cart">🛒<small>Panier</small></button>
-  <button class="nav" data-go="account">👤<small>Compte</small></button>
-  <button class="nav" data-go="admin">⚙️<small>Admin</small></button>
+
+<!-- MHD IA -->
+
+<button id="aiFloat" class="ai-float" aria-label="Ouvrir MHD IA">
+  🤖 <b>MHD IA</b>
+</button>
+
+<div id="aiBox" class="ai-box hidden">
+
+  <div class="ai-head">
+    <b>🤖 MHD IA</b>
+    <button id="aiClose">×</button>
+  </div>
+
+  <div id="aiMessages" class="ai-messages">
+    <div class="ai-msg bot">
+      Salut 👋 Je peux aider pour les produits, les commandes et le support.
+    </div>
+  </div>
+
+  <div class="ai-quick">
+    <button data-ai="produits">🛍️ Produits</button>
+    <button data-ai="commande">📦 Commander</button>
+    <button data-ai="support">💬 Support</button>
+  </div>
+
+  <div class="ai-input">
+    <input id="aiInput" placeholder="Écris ta question...">
+    <button id="aiSend">➤</button>
+  </div>
+
+</div>
+
+<!-- NAVIGATION -->
+
+<nav class="liquid-nav">
+
+  <button data-go="accueil">
+    🏠
+    <span>Accueil</span>
+  </button>
+
+  <button data-go="boutique">
+    🛍️
+    <span>Boutique</span>
+  </button>
+
+  <button data-go="panier">
+    🛒
+    <span>Panier</span>
+  </button>
+
+  <button data-go="compte">
+    👤
+    <span>Compte</span>
+  </button>
+
+  <button id="adminOpen" data-go="admin">
+    ⚙️
+    <span>Admin</span>
+  </button>
+
 </nav>
-<div id="toast" class="toast"></div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="script.js?v=7"></script>
+<script src="script.js?v=6"></script>
+
 </body>
 </html>
