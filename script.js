@@ -261,6 +261,7 @@ async function checkout(e){
   const phone=$("phone").value.trim();
 
   if(!first||!last||!phone)return toast("Remplis tous les champs");
+  if(!phoneVerified)return toast("Vérifie ton numéro avant de commander");
 
   const order={
     user_id:session.user.id,
@@ -409,93 +410,56 @@ document.addEventListener("click",async e=>{
    EVENTS
    ========================= */
 
-$("search").addEventListener("input",render);
-$("checkoutForm").addEventListener("submit",checkout);
-$("login").onclick=()=>auth("login");
-$("signup").onclick=()=>auth("signup");
-$("google").onclick=()=>oauth("google");
-$("apple").onclick=()=>oauth("apple");
-$("saveProfile").onclick=saveProfile;
+$("search")?.addEventListener("input",render);
+$("checkoutForm")?.addEventListener("submit",checkout);
+$("login")?.addEventListener("click",()=>auth("login"));
+$("signup")?.addEventListener("click",()=>auth("signup"));
+$("google")?.addEventListener("click",()=>oauth("google"));
+$("apple")?.addEventListener("click",()=>oauth("apple"));
+$("saveProfile")?.addEventListener("click",saveProfile);
+$("logout")?.addEventListener("click",async()=>{await sb?.auth.signOut();session=null;phoneVerified=false;go("account");toast("Déconnecté")});
+$("adminBtn")?.addEventListener("click",()=>go("admin"));
+$("productForm")?.addEventListener("submit",addProduct);
+$("refreshOrders")?.addEventListener("click",loadAdminOrders);
 
-$("logout").onclick=async()=>{
-  await sb?.auth.signOut();
-  session=null;
-  go("account");
-  toast("Déconnecté");
-};
-
-$("adminBtn").onclick=()=>go("admin");
-$("productForm").onsubmit=addProduct;
-$("refreshOrders").onclick=loadAdminOrders;
-
-$("aiButton").onclick=()=>$("aiBox").classList.toggle("hidden");
-$("closeAI").onclick=()=>$("aiBox").classList.add("hidden");
-
-$("aiSend").onclick=()=>{
-  const i=$("aiInput");
-  const t=i.value.trim();
-  if(!t)return;
-
-  $("aiMessages").insertAdjacentHTML(
-    "beforeend",
-    `<div class="msg user">${esc(t)}</div><div class="msg bot">${esc(t.toLowerCase().includes("whatsapp")?"WhatsApp : +221 78 748 81 99.":"Je peux t'aider avec la boutique, le panier, les commandes et WhatsApp. ✦")}</div>`
-  );
-
+$("aiButton")?.addEventListener("click",()=>$("aiBox")?.classList.toggle("hidden"));
+$("closeAI")?.addEventListener("click",()=>$("aiBox")?.classList.add("hidden"));
+$("aiSend")?.addEventListener("click",()=>{
+  const i=$("aiInput"); const t=i?.value.trim(); if(!t)return;
+  $("aiMessages")?.insertAdjacentHTML("beforeend",`<div class="msg user">${esc(t)}</div><div class="msg bot">${esc(t.toLowerCase().includes("whatsapp")?"WhatsApp : +221 78 748 81 99.":"Je peux t'aider avec la boutique, le panier, les commandes et WhatsApp. ✦")}</div>`);
   i.value="";
-};
-
-$("aiInput").onkeydown=e=>{
-  if(e.key==="Enter")$("aiSend").click();
-};
-
-$("sendOtp").onclick=async()=>{
-  if(!sb||!session)return toast("Connecte-toi d'abord");
-
-  const phone=$("phone").value.trim();
-  const r=await sb.auth.updateUser({phone});
-
-  if(r.error)return toast("Vérification SMS non configurée dans Supabase");
-
-  $("otp").hidden=false;
-  $("verifyOtp").hidden=false;
-  $("phoneInfo").textContent="Code envoyé.";
-};
-
-$("verifyOtp").onclick=async()=>{
-  const r=await sb.auth.verifyOtp({
-    phone:$("phone").value.trim(),
-    token:$("otp").value.trim(),
-    type:"phone_change"
-  });
-
-  if(r.error)return toast(r.error.message);
-
-  phoneVerified=true;
-  $("phoneInfo").textContent="Numéro vérifié ✓";
-  toast("Numéro vérifié");
-};
-
-$("ordersBtn").onclick=async()=>{
-  if(!sb||!session)return;
-
-  const r=await sb.from("orders")
-    .select("*")
-    .eq("user_id",session.user.id)
-    .order("created_at",{ascending:false});
-
-  $("orders").innerHTML=r.error
-    ?`<p class="status">${esc(r.error.message)}</p>`
-    :(r.data.length
-      ?r.data.map(o=>`<div class="order glass"><strong>${money(o.total)}</strong><small>${new Date(o.created_at).toLocaleString("fr-FR")} · ${esc(o.status)}</small></div>`).join("")
-      :"<p class='muted'>Aucune commande.</p>");
-};
-
-document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
-  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
-  t.classList.add("active");
-  $("productsTab").classList.toggle("hidden",t.dataset.tab!=="productsTab");
-  $("ordersTab").classList.toggle("hidden",t.dataset.tab!=="ordersTab");
 });
+$("aiInput")?.addEventListener("keydown",e=>{if(e.key==="Enter")$("aiSend")?.click()});
+
+$("sendOtp")?.addEventListener("click",async()=>{
+  if(!sb||!session)return toast("Connecte-toi d'abord");
+  const phone=$("phone")?.value.trim(); if(!phone)return toast("Entre ton numéro");
+  const r=await sb.auth.updateUser({phone});
+  if(r.error)return toast("Vérification SMS non configurée dans Supabase");
+  $("otp")?.classList.remove("hidden"); $("verifyOtp")?.classList.remove("hidden");
+  $("phoneInfo").textContent="Code envoyé par SMS.";
+});
+
+$("verifyOtp")?.addEventListener("click",async()=>{
+  const phone=$("phone")?.value.trim(), token=$("otp")?.value.trim();
+  const r=await sb.auth.verifyOtp({phone,token,type:"phone_change"});
+  if(r.error)return toast(r.error.message);
+  phoneVerified=true;
+  await sb.from("profiles").upsert({id:session.user.id,phone,phone_verified:true},{onConflict:"id"});
+  $("phoneInfo").textContent="Numéro vérifié ✓"; toast("Numéro vérifié");
+});
+
+$("ordersBtn")?.addEventListener("click",async()=>{
+  if(!sb||!session)return;
+  const r=await sb.from("orders").select("*").eq("user_id",session.user.id).order("created_at",{ascending:false});
+  $("orders").innerHTML=r.error?`<p class="status">${esc(r.error.message)}</p>`:(r.data.length?r.data.map(o=>`<div class="order glass"><strong>${money(o.total)}</strong><small>${new Date(o.created_at).toLocaleString("fr-FR")} · ${esc(o.status)}</small></div>`).join(""):"<p class='muted'>Aucune commande.</p>");
+});
+
+document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active")); t.classList.add("active");
+  $("productsTab")?.classList.toggle("hidden",t.dataset.tab!=="productsTab");
+  $("ordersTab")?.classList.toggle("hidden",t.dataset.tab!=="ordersTab");
+}));
 
 /* =========================
    DÉMARRAGE
